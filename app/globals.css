@@ -1,0 +1,113 @@
+@import "tailwindcss";
+
+:root {
+  --background: #F4F7FB;              /* soft cool background */
+  --foreground: #111827;              /* near-black blue gray */
+  --card: #FFFFFF;
+  --card-foreground: #111827;
+  --primary: #3D65A1;
+  --primary-foreground: #FFFFFF;
+  --secondary: #E8EEF7;               /* soft blue surface */
+  --secondary-foreground: #1E293B;
+  --muted: #EEF2F9;
+  --muted-foreground: #64748B;
+  --accent: #DCE6F5;
+  --accent-foreground: #1E293B;
+  --destructive: #DC2626;
+  --destructive-foreground: #FFFFFF;
+  --border: #E2E8F0;
+  --ring: #3D65A1;
+  --radius: 1rem;
+  --shadow-soft: 0 1px 3px 0 rgb(0 0 0 / 0.05),
+                 0 1px 2px -1px rgb(0 0 0 / 0.05);
+}
+
+:root {
+  --background: #F4F7FB;              /* soft cool background */
+  --foreground: #111827;              /* near-black blue gray */
+  --card: #FFFFFF;
+  --card-foreground: #111827;
+  --primary: #3D65A1;
+  --primary-foreground: #FFFFFF;
+  --secondary: #E8EEF7;               /* soft blue surface */
+  --secondary-foreground: #1E293B;
+  --muted: #EEF2F9;
+  --muted-foreground: #64748B;
+  --accent: #DCE6F5;
+  --accent-foreground: #1E293B;
+  --destructive: #DC2626;
+  --destructive-foreground: #FFFFFF;
+  --border: #E2E8F0;
+  --ring: #3D65A1;
+  --radius: 1rem;
+  --shadow-soft: 0 1px 3px 0 rgb(0 0 0 / 0.05),
+                 0 1px 2px -1px rgb(0 0 0 / 0.05);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --radius-sm: calc(var(--radius) - 0.25rem);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 0.25rem);
+  --radius-2xl: 1rem;
+  --shadow-soft: var(--shadow-soft);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-feature-settings: "rlig" 1, "calt" 1;
+}
+
+@layer utilities {
+  .animate-in {
+    animation-duration: 0.2s;
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .fade-in-0 {
+    animation-name: fadeIn;
+  }
+  .zoom-in-95 {
+    animation-name: zoomIn;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes zoomIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* Scrollbar */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: var(--muted);
+  border-radius: 3px;
+}
