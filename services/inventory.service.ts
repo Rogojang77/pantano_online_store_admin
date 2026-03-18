@@ -25,4 +25,7 @@ export const inventoryService = {
         { params }
       )
       .then((r) => r.data),
+
+  setProductStock: (productId: string, quantity: number) =>
+    api.post<{ ok: boolean }>(`/inventory/product/${productId}/stock`, { quantity }).then((r) => r.data),
 };

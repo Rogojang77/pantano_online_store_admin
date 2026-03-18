@@ -34,6 +34,8 @@ export default function InventoryPage() {
   const [search, setSearch] = useState("");
   const [syncStatus, setSyncStatus] = useState<SyncState | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [newStock, setNewStock] = useState<Record<string, number | "">>({});
 
   const fetchInventory = useCallback(() => {
     setLoading(true);
@@ -77,6 +79,27 @@ export default function InventoryPage() {
       .catch(() => toast.error("Sync failed"))
       .finally(() => setSyncing(false));
   }, [isAdmin, fetchInventory, loadSyncStatus]);
+
+  const handleStockChange = (productId: string, value: string) => {
+    const num = value === "" ? "" : Number(value);
+    if (num !== "" && Number.isNaN(num)) return;
+    setNewStock((prev) => ({ ...prev, [productId]: num }));
+  };
+
+  const handleStockSave = async (productId: string) => {
+    const value = newStock[productId];
+    if (value === "" || value == null) return;
+    setUpdatingId(productId);
+    try {
+      await inventoryService.setProductStock(productId, Number(value));
+      toast.success("Stock updated and synced to Odoo");
+      fetchInventory();
+    } catch {
+      toast.error("Failed to update stock");
+    } finally {
+      setUpdatingId(null);
+    }
+  };
 
   const statusLabel =
     syncStatus?.status === "RUNNING"
@@ -185,6 +208,7 @@ export default function InventoryPage() {
                       <th className="px-4 py-3 font-medium text-muted-foreground">Stock</th>
                       <th className="px-4 py-3 font-medium text-muted-foreground">Reserved</th>
                       <th className="px-4 py-3 font-medium text-muted-foreground">Available</th>
+                      <th className="px-4 py-3 font-medium text-muted-foreground text-right">Edit stock</th>
                       <th className="px-4 py-3 font-medium text-muted-foreground">Last sync</th>
                     </tr>
                   </thead>
@@ -235,6 +259,28 @@ export default function InventoryPage() {
                             {r.lastSyncedAt
                               ? new Date(r.lastSyncedAt).toLocaleString()
                               : "—"}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            {isAdmin ? (
+                              <div className="flex items-center justify-end gap-2">
+                                <Input
+                                  type="number"
+                                  className="h-8 w-20 rounded-xl text-right"
+                                  value={newStock[r.productId] ?? r.stockQuantity}
+                                  onChange={(e) => handleStockChange(r.productId, e.target.value)}
+                                />
+                                <Button
+                                  size="icon"
+                                  className="h-8 w-8 rounded-xl"
+                                  disabled={updatingId === r.productId}
+                                  onClick={() => handleStockSave(r.productId)}
+                                >
+                                  <CheckCircle2 className={cn("size-4", updatingId === r.productId && "animate-pulse")} />
+                                </Button>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">View only</span>
+                            )}
                           </td>
                         </tr>
                       ))
