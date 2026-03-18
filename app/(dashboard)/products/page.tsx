@@ -19,8 +19,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { productsService, type ProductListItem } from "@/services/products.service";
 import type { PaginatedResponse } from "@/types/api";
 import { cn } from "@/lib/utils";
+import { useRouter } from "next/navigation";
 
 export default function ProductsPage() {
+  const router = useRouter();
   const [data, setData] = useState<PaginatedResponse<ProductListItem> | null>(null);
   const [loading, setLoading] = useState(true);
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -72,6 +74,23 @@ export default function ProductsPage() {
         </span>
       ),
     },
+    {
+      id: "actions",
+      header: "",
+      enableSorting: false,
+      cell: ({ row }) => (
+        <div className="flex justify-end">
+          <Button
+            size="sm"
+            variant="outline"
+            className="rounded-xl"
+            onClick={() => router.push(`/products/${row.original.id}`)}
+          >
+            Edit
+          </Button>
+        </div>
+      ),
+    },
   ];
 
   const table = useReactTable({
@@ -101,9 +120,18 @@ export default function ProductsPage() {
       </div>
 
       <Card className="rounded-2xl border-border/60">
-        <CardHeader>
-          <CardTitle>All products</CardTitle>
-          <CardDescription>Paginated list with sorting</CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between gap-4">
+          <div>
+            <CardTitle>All products</CardTitle>
+            <CardDescription>Paginated list with sorting</CardDescription>
+          </div>
+          <Button
+            size="sm"
+            className="rounded-xl"
+            onClick={() => router.push("/products/new")}
+          >
+            Add product
+          </Button>
         </CardHeader>
         <CardContent>
           {loading ? (
