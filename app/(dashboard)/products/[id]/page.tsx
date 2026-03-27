@@ -178,7 +178,8 @@ export default function ProductEditPage() {
     setTechnicalSpecsError(null);
     resetJson();
     reset({
-      sku: product.sku,
+      ean: product.ean ?? undefined,
+      sku: product.sku ?? undefined,
       name: product.name,
       slug: product.slug,
       description: product.description,

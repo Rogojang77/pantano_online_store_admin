@@ -34,7 +34,8 @@ const odooFormSchema = z.object({
 
 const baseProductFields = {
   name: z.string().min(1, "Product name is required"),
-  sku: z.string().min(1, "SKU is required"),
+  ean: z.string().min(1, "EAN is required"),
+  sku: z.string().optional(),
   slug: z.string().optional(),
   description: z.string().optional(),
   baseUnit: z.string().optional(),
@@ -69,6 +70,7 @@ export const createProductSchema = z.object(baseProductFields);
 export const updateProductSchema = z.object({
   ...baseProductFields,
   name: baseProductFields.name.optional(),
+  ean: baseProductFields.ean.optional(),
   sku: baseProductFields.sku.optional(),
   categoryId: baseProductFields.categoryId.optional(),
 });

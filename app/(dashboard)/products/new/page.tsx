@@ -164,6 +164,7 @@ export default function ProductCreatePage() {
     setEnriching(true);
     try {
       const preview = await geminiEnrichmentService.previewDraft({
+        ean: values.ean,
         sku: values.sku,
         name: values.name,
         description: values.description ?? null,

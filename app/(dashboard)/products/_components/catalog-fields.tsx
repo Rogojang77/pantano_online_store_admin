@@ -29,8 +29,13 @@ export function CatalogFields({ register, categories, brands, errors, slugLabel 
           <FieldError message={errors?.name?.message as string} />
         </div>
         <div>
-          <label className="block text-sm font-medium mb-1">SKU</label>
-          <Input className="rounded-xl" {...register("sku", { required: true })} />
+          <label className="block text-sm font-medium mb-1">EAN</label>
+          <Input className="rounded-xl" {...register("ean", { required: true })} />
+          <FieldError message={errors?.ean?.message as string} />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">SKU (fallback, optional)</label>
+          <Input className="rounded-xl" {...register("sku")} />
           <FieldError message={errors?.sku?.message as string} />
         </div>
         <div>

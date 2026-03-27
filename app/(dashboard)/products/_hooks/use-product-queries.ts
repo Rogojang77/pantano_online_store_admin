@@ -42,7 +42,7 @@ export function useProductList(params: {
       ...(params.status && { status: params.status }),
       ...(params.categoryId && { categoryId: params.categoryId }),
       ...(params.brandId && { brandId: params.brandId }),
-      sortBy: params.sortBy as "name" | "createdAt" | "updatedAt" | "sku",
+      sortBy: params.sortBy as "name" | "createdAt" | "updatedAt" | "ean" | "sku",
       sortDir: params.sortDir as "asc" | "desc",
     }),
     // Keep current rows rendered while loading the next page to avoid table remount jank.

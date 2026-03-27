@@ -38,7 +38,7 @@ export default function ProductsPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [brandFilter, setBrandFilter] = useState("");
-  const [sortBy, setSortBy] = useState<"createdAt" | "name" | "sku" | "updatedAt">("createdAt");
+  const [sortBy, setSortBy] = useState<"createdAt" | "name" | "ean" | "updatedAt">("createdAt");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const limit = 10;
@@ -102,7 +102,7 @@ export default function ProductsPage() {
       cell: ({ row }) => (
         <div>
           <p className="font-medium">{row.original.name}</p>
-          <p className="text-xs text-muted-foreground">{row.original.sku}</p>
+          <p className="text-xs text-muted-foreground">{row.original.ean || row.original.sku}</p>
         </div>
       ),
     },
@@ -226,7 +226,7 @@ export default function ProductsPage() {
                 <div className="relative md:col-span-2">
                   <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
-                    placeholder="Search by name or SKU..."
+                    placeholder="Search by name, EAN, or SKU..."
                     value={searchInput}
                     onChange={(e) => setSearchInput(e.target.value)}
                     className="rounded-2xl pl-9"
@@ -270,12 +270,12 @@ export default function ProductsPage() {
                   <Select
                     className="rounded-2xl"
                     value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value as "createdAt" | "name" | "sku" | "updatedAt")}
+                    onChange={(e) => setSortBy(e.target.value as "createdAt" | "name" | "ean" | "updatedAt")}
                   >
                     <option value="createdAt">Sort by created</option>
                     <option value="updatedAt">Sort by updated</option>
                     <option value="name">Sort by name</option>
-                    <option value="sku">Sort by SKU</option>
+                    <option value="ean">Sort by EAN</option>
                   </Select>
                   <Select
                     className="rounded-2xl"

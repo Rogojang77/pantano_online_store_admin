@@ -19,6 +19,7 @@ interface VariantsSectionProps {
 }
 
 interface VariantDraft {
+  ean: string;
   sku: string;
   name: string;
   price: string;
@@ -26,7 +27,7 @@ interface VariantDraft {
   isActive: boolean;
 }
 
-const emptyDraft: VariantDraft = { sku: "", name: "", price: "", compareAtPrice: "", isActive: true };
+const emptyDraft: VariantDraft = { ean: "", sku: "", name: "", price: "", compareAtPrice: "", isActive: true };
 
 export function VariantsSection({ productId, variants, onVariantsChanged }: VariantsSectionProps) {
   const [showForm, setShowForm] = useState(false);
@@ -37,14 +38,15 @@ export function VariantsSection({ productId, variants, onVariantsChanged }: Vari
   const [editSaving, setEditSaving] = useState(false);
 
   const handleCreate = async () => {
-    if (!draft.sku.trim() || !draft.price.trim()) {
-      toast.error("SKU and price are required");
+    if (!draft.ean.trim() || !draft.price.trim()) {
+      toast.error("EAN and price are required");
       return;
     }
     setSaving(true);
     try {
       const payload: CreateVariantPayload = {
         productId,
+        ean: draft.ean.trim(),
         sku: draft.sku.trim(),
         name: draft.name.trim() || undefined,
         price: Number(draft.price),
@@ -67,6 +69,7 @@ export function VariantsSection({ productId, variants, onVariantsChanged }: Vari
     setEditingId(v.id);
     setEditDraft({
       sku: v.sku,
+      ean: v.ean || v.sku,
       name: v.name ?? "",
       price: String(v.price),
       compareAtPrice: v.compareAtPrice != null ? String(v.compareAtPrice) : "",
@@ -79,6 +82,7 @@ export function VariantsSection({ productId, variants, onVariantsChanged }: Vari
     setEditSaving(true);
     try {
       await productsService.updateVariant(editingId, {
+        ean: editDraft.ean.trim() || undefined,
         sku: editDraft.sku.trim() || undefined,
         name: editDraft.name.trim() || undefined,
         price: editDraft.price ? Number(editDraft.price) : undefined,
@@ -121,7 +125,13 @@ export function VariantsSection({ productId, variants, onVariantsChanged }: Vari
           <p className="text-xs font-medium text-muted-foreground">New variant</p>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
             <Input
-              placeholder="SKU *"
+              placeholder="EAN *"
+              className="rounded-xl"
+              value={draft.ean}
+              onChange={(e) => setDraft((d) => ({ ...d, ean: e.target.value }))}
+            />
+            <Input
+              placeholder="SKU (fallback)"
               className="rounded-xl"
               value={draft.sku}
               onChange={(e) => setDraft((d) => ({ ...d, sku: e.target.value }))}
@@ -181,7 +191,13 @@ export function VariantsSection({ productId, variants, onVariantsChanged }: Vari
               <div key={v.id} className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-3">
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
                   <Input
-                    placeholder="SKU"
+                    placeholder="EAN"
+                    className="rounded-xl"
+                    value={editDraft.ean}
+                    onChange={(e) => setEditDraft((d) => ({ ...d, ean: e.target.value }))}
+                  />
+                  <Input
+                    placeholder="SKU (fallback)"
                     className="rounded-xl"
                     value={editDraft.sku}
                     onChange={(e) => setEditDraft((d) => ({ ...d, sku: e.target.value }))}
@@ -248,7 +264,7 @@ export function VariantsSection({ productId, variants, onVariantsChanged }: Vari
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-sm">{v.sku}</span>
+                    <span className="font-mono text-sm">{v.ean || v.sku}</span>
                     {v.name && <span className="text-sm text-muted-foreground">&mdash; {v.name}</span>}
                     <Badge variant={v.isActive ? "success" : "secondary"}>
                       {v.isActive ? "Active" : "Inactive"}

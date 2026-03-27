@@ -9,6 +9,7 @@ interface BackendValidationError {
 
 const FIELD_ERROR_PATTERNS: Record<string, string> = {
   slug: "slug",
+  ean: "ean",
   sku: "sku",
   name: "name",
   categoryId: "categoryId",
@@ -27,6 +28,10 @@ export function mapApiErrorToForm<T extends FieldValues>(
     const msg = data.message.toLowerCase();
     if (msg.includes("slug")) {
       setError("slug" as Path<T>, { type: "server", message: data.message });
+      return data.message;
+    }
+    if (msg.includes("ean")) {
+      setError("ean" as Path<T>, { type: "server", message: data.message });
       return data.message;
     }
     if (msg.includes("sku")) {

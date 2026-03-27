@@ -38,7 +38,7 @@ export default function InventoryPage() {
   const [searchInput, setSearchInput] = useState("");
   const [searchDebounced, setSearchDebounced] = useState("");
   const [stockStatus, setStockStatus] = useState<"all" | "in_stock" | "low_stock" | "out_of_stock">("all");
-  const [sortBy, setSortBy] = useState<"productName" | "sku" | "stockQuantity" | "reservedQuantity" | "lastSyncedAt">("lastSyncedAt");
+  const [sortBy, setSortBy] = useState<"productName" | "ean" | "stockQuantity" | "reservedQuantity" | "lastSyncedAt">("lastSyncedAt");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [syncStatus, setSyncStatus] = useState<SyncState | null>(null);
   const [syncing, setSyncing] = useState(false);
@@ -213,13 +213,13 @@ export default function InventoryPage() {
             <div>
               <CardTitle>Stock overview</CardTitle>
               <CardDescription>
-                Stock, reserved, available, and last sync. Search by SKU or product name.
+                Stock, reserved, available, and last sync. Search by EAN or product name.
               </CardDescription>
             </div>
             <div className="relative w-full sm:w-64">
               <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search by SKU or name..."
+                placeholder="Search by EAN or name..."
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 className="rounded-2xl pl-9"
@@ -257,13 +257,13 @@ export default function InventoryPage() {
                   value={sortBy}
                   onChange={(e) =>
                     setSortBy(
-                      e.target.value as "productName" | "sku" | "stockQuantity" | "reservedQuantity" | "lastSyncedAt"
+                      e.target.value as "productName" | "ean" | "stockQuantity" | "reservedQuantity" | "lastSyncedAt"
                     )
                   }
                 >
                   <option value="lastSyncedAt">Sort by last sync</option>
                   <option value="productName">Sort by product name</option>
-                  <option value="sku">Sort by SKU</option>
+                  <option value="ean">Sort by EAN</option>
                   <option value="stockQuantity">Sort by stock qty</option>
                   <option value="reservedQuantity">Sort by reserved qty</option>
                 </Select>
@@ -281,7 +281,7 @@ export default function InventoryPage() {
                   <thead>
                     <tr className="border-b border-border bg-muted/40">
                       <th className="px-4 py-3 font-medium text-muted-foreground">Product</th>
-                      <th className="px-4 py-3 font-medium text-muted-foreground">SKU</th>
+                      <th className="px-4 py-3 font-medium text-muted-foreground">EAN</th>
                       <th className="px-4 py-3 font-medium text-muted-foreground">Stock</th>
                       <th className="px-4 py-3 font-medium text-muted-foreground">Reserved</th>
                       <th className="px-4 py-3 font-medium text-muted-foreground">Available</th>
@@ -309,7 +309,7 @@ export default function InventoryPage() {
                           )}
                         >
                           <td className="px-4 py-3 font-medium">{r.productName}</td>
-                          <td className="px-4 py-3 font-mono text-muted-foreground">{r.sku}</td>
+                          <td className="px-4 py-3 font-mono text-muted-foreground">{r.ean}</td>
                           <td className="px-4 py-3">{r.stockQuantity}</td>
                           <td className="px-4 py-3">{r.reservedQuantity}</td>
                           <td className="px-4 py-3">

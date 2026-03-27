@@ -5,6 +5,7 @@ export interface ProductListItem {
   id: string;
   name: string;
   slug: string;
+  ean: string | null;
   sku: string;
   status: string;
   categoryId: string | null;
@@ -104,7 +105,8 @@ export interface ProductAttributeInputItem {
 }
 
 export interface CreateProductPayload {
-  sku: string;
+  ean: string | null;
+  sku?: string;
   name: string;
   slug?: string;
   description?: string;
@@ -138,6 +140,7 @@ export interface VariantAttributeItem {
 export interface ProductVariantItem {
   id: string;
   productId: string;
+  ean: string;
   sku: string;
   name?: string | null;
   price: number;
@@ -150,7 +153,8 @@ export interface ProductVariantItem {
 
 export interface CreateVariantPayload {
   productId: string;
-  sku: string;
+  ean: string;
+  sku?: string;
   name?: string;
   price: number;
   compareAtPrice?: number;
@@ -170,7 +174,7 @@ export const productsService = {
     brandId?: string;
     status?: string;
     search?: string;
-    sortBy?: "name" | "createdAt" | "updatedAt" | "sku";
+    sortBy?: "name" | "createdAt" | "updatedAt" | "ean" | "sku";
     sortDir?: "asc" | "desc";
   }) =>
     api

@@ -10,6 +10,7 @@ export interface GeminiEnrichmentConfig {
 
 export interface GeminiPreviewProduct {
   id: string;
+  ean: string;
   sku: string;
   name: string;
   barcode: string | null;
@@ -31,6 +32,7 @@ export interface GeminiPreviewResponse {
 }
 
 export interface GeminiDraftPreviewPayload {
+  ean?: string;
   sku?: string;
   name: string;
   description?: string | null;

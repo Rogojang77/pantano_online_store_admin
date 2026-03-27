@@ -4,7 +4,7 @@ import type { PaginatedResponse } from "@/types/api";
 export interface InventoryListItem {
   productId: string;
   productName: string;
-  sku: string;
+  ean: string;
   stockQuantity: number;
   reservedQuantity: number;
   availableQuantity: number;
@@ -17,7 +17,7 @@ export const inventoryService = {
     limit?: number;
     search?: string;
     stockStatus?: "all" | "in_stock" | "low_stock" | "out_of_stock";
-    sortBy?: "productName" | "sku" | "stockQuantity" | "reservedQuantity" | "lastSyncedAt";
+    sortBy?: "productName" | "ean" | "stockQuantity" | "reservedQuantity" | "lastSyncedAt";
     sortDir?: "asc" | "desc";
   }) =>
     api
