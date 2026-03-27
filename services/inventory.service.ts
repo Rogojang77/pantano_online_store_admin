@@ -12,7 +12,14 @@ export interface InventoryListItem {
 }
 
 export const inventoryService = {
-  getList: (params?: { page?: number; limit?: number; search?: string }) =>
+  getList: (params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    stockStatus?: "all" | "in_stock" | "low_stock" | "out_of_stock";
+    sortBy?: "productName" | "sku" | "stockQuantity" | "reservedQuantity" | "lastSyncedAt";
+    sortDir?: "asc" | "desc";
+  }) =>
     api
       .get<PaginatedResponse<InventoryListItem>>("/inventory/list", { params })
       .then((r) => r.data),

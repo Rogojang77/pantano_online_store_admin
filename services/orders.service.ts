@@ -9,6 +9,7 @@ export type OrderStatus =
   | "DELIVERED"
   | "CANCELLED";
 export type OrderType = "RESERVATION" | "DELIVERY";
+export type PaymentStatus = "PENDING" | "PAID" | "REFUNDED" | "FAILED";
 
 export interface OrderListItem {
   id: string;
@@ -16,7 +17,7 @@ export interface OrderListItem {
   userId: string;
   type: OrderType;
   status: OrderStatus;
-  paymentStatus: string;
+  paymentStatus: PaymentStatus | string;
   addressLine1?: string | null;
   addressLine2?: string | null;
   city?: string | null;
@@ -39,6 +40,11 @@ export interface OrderListItem {
     variant?: { sku?: string; name?: string | null; product?: { name: string } };
   }>;
   reservation?: { id: string; pickupUntil: string | null } | null;
+  invoice?: {
+    id: string;
+    invoiceNumber: string;
+    odooInvoiceId: string | null;
+  } | null;
 }
 
 export const ordersService = {

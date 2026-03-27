@@ -7,23 +7,15 @@ import {
   LayoutDashboard,
   Package,
   FolderTree,
-  LayoutPanelTop,
-  Image as ImageIcon,
-  Percent,
   ShoppingCart,
-  CalendarClock,
   Warehouse,
   Users,
-  Shield,
   Settings,
-  Plug,
-  FileText,
   ChevronLeft,
   Menu,
   X,
   ContactRound,
-  MessageCircleQuestion,
-  Mail,
+  Plug,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCanAccessAdminSection } from "@/hooks/use-role-guard";
@@ -35,23 +27,21 @@ const commonNav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/products", label: "Products", icon: Package },
   { href: "/categories", label: "Categories", icon: FolderTree },
-  { href: "/media", label: "Media", icon: ImageIcon },
-  { href: "/cms", label: "CMS", icon: LayoutPanelTop },
-  { href: "/promotions", label: "Promotions", icon: Percent },
+  // { href: "/media", label: "Media", icon: ImageIcon },
+  // { href: "/cms", label: "CMS", icon: LayoutPanelTop },
+  // { href: "/promotions", label: "Promotions", icon: Percent },
   { href: "/orders", label: "Orders", icon: ShoppingCart },
-  { href: "/reservations", label: "Reservations", icon: CalendarClock },
+  // { href: "/reservations", label: "Reservations", icon: CalendarClock },
   { href: "/inventory", label: "Inventory", icon: Warehouse },
 ];
 
 const adminNav = [
   { href: "/users", label: "Users", icon: Users },
-  { href: "/roles", label: "Roles", icon: Shield },
+  // { href: "/roles", label: "Roles", icon: Shield },
   { href: "/contact", label: "Contact", icon: ContactRound },
-  { href: "/newsletter", label: "Newsletter", icon: Mail },
-  { href: "/faq", label: "FAQ submissions", icon: MessageCircleQuestion },
   { href: "/admin/settings", label: "System Settings", icon: Settings },
   { href: "/admin/integrations/odoo", label: "Odoo Integration", icon: Plug },
-  { href: "/admin/logs", label: "Logs", icon: FileText },
+  // { href: "/admin/logs", label: "Logs", icon: FileText },
 ];
 
 interface SidebarProps {
@@ -134,7 +124,7 @@ export function Sidebar({
           </Button>
         )}
       </div>
-      <nav className="flex flex-1 flex-col gap-1 p-4">
+      <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-4 scrollbar-thin">
         <div className="space-y-1">
           {commonNav.map((item) => (
             <NavLink key={item.href} href={item.href} label={item.label} icon={item.icon} />

@@ -8,4 +8,7 @@ export const authService = {
 
   getProfile: () =>
     api.get<UserProfile>("/auth/profile").then((r) => r.data),
+
+  logout: () =>
+    api.post<{ message: string }>("/auth/logout").then((r) => r.data),
 };

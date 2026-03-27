@@ -19,6 +19,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogDescription,
@@ -28,6 +29,7 @@ import { ordersService, type OrderStatus } from "@/services/orders.service";
 import type { PaginatedResponse } from "@/types/api";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { ListFetchError } from "@/components/list-fetch-error";
 
 const statusVariant: Record<string, "default" | "secondary" | "success" | "destructive" | "warning"> = {
   PENDING: "warning",
@@ -41,6 +43,7 @@ const statusVariant: Record<string, "default" | "secondary" | "success" | "destr
 export default function ReservationsPage() {
   const [data, setData] = useState<PaginatedResponse<ReservationListItem> | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [page, setPage] = useState(0);
   const [limit] = useState(10);
   const [fromDate, setFromDate] = useState("");
@@ -48,6 +51,8 @@ export default function ReservationsPage() {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selected, setSelected] = useState<ReservationListItem | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [pendingCancelOrderId, setPendingCancelOrderId] = useState<string | null>(null);
 
   const fetchReservations = useCallback(() => {
     setLoading(true);
@@ -59,9 +64,13 @@ export default function ReservationsPage() {
     };
     reservationsService
       .getList(params)
-      .then(setData)
+      .then((response) => {
+        setData(response);
+        setLoadError(false);
+      })
       .catch(() => {
-        setData({ data: [], meta: { total: 0, page: 1, limit, totalPages: 0, hasNext: false, hasPrev: false } });
+        setData(null);
+        setLoadError(true);
         toast.error("Failed to load reservations");
       })
       .finally(() => setLoading(false));
@@ -95,6 +104,18 @@ export default function ReservationsPage() {
     },
     [fetchReservations]
   );
+
+  const requestCancelOrder = useCallback((orderId: string) => {
+    setPendingCancelOrderId(orderId);
+    setCancelConfirmOpen(true);
+  }, []);
+
+  const confirmCancelOrder = useCallback(async () => {
+    if (!pendingCancelOrderId) return;
+    await setOrderStatus(pendingCancelOrderId, "CANCELLED");
+    setCancelConfirmOpen(false);
+    setPendingCancelOrderId(null);
+  }, [pendingCancelOrderId, setOrderStatus]);
 
   const columns: ColumnDef<ReservationListItem>[] = [
     {
@@ -184,7 +205,7 @@ export default function ReservationsPage() {
                   variant="ghost"
                   size="icon"
                   className="size-8 rounded-xl text-destructive"
-                  onClick={() => setOrderStatus(orderId, "CANCELLED")}
+                  onClick={() => requestCancelOrder(orderId)}
                   aria-label="Cancel"
                 >
                   <X className="size-4" />
@@ -253,6 +274,8 @@ export default function ReservationsPage() {
                 <Skeleton key={i} className="h-12 w-full rounded-xl" />
               ))}
             </div>
+          ) : loadError ? (
+            <ListFetchError message="Could not load reservations." onRetry={fetchReservations} />
           ) : (
             <>
               <div className="overflow-x-auto rounded-2xl border border-border/60">
@@ -385,15 +408,59 @@ export default function ReservationsPage() {
                       variant="destructive"
                       className="rounded-xl"
                       disabled={actionLoading}
-                      onClick={() => setOrderStatus(selected.orderId, "CANCELLED")}
+                      onClick={() => requestCancelOrder(selected.orderId)}
                     >
                       <X className="size-4 mr-2" />
                       Cancel reservation
                     </Button>
                   </div>
                 )}
+              <DialogFooter className="pt-2">
+                <Button variant="outline" className="rounded-xl" onClick={() => setDetailsOpen(false)}>
+                  Close
+                </Button>
+              </DialogFooter>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={cancelConfirmOpen}
+        onOpenChange={(open) => {
+          setCancelConfirmOpen(open);
+          if (!open) {
+            setPendingCancelOrderId(null);
+          }
+        }}
+      >
+        <DialogContent className="rounded-2xl sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cancel reservation?</DialogTitle>
+            <DialogDescription>
+              This sets the related order status to CANCELLED. Confirm only if this reservation should no
+              longer be fulfilled.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              className="rounded-xl"
+              onClick={() => {
+                setCancelConfirmOpen(false);
+                setPendingCancelOrderId(null);
+              }}
+            >
+              Keep reservation
+            </Button>
+            <Button
+              variant="destructive"
+              className="rounded-xl"
+              onClick={() => void confirmCancelOrder()}
+              disabled={actionLoading || !pendingCancelOrderId}
+            >
+              {actionLoading ? "Cancelling..." : "Confirm cancel"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </motion.div>

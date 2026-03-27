@@ -12,7 +12,7 @@ import {
   flexRender,
 } from "@tanstack/react-table";
 import { motion } from "framer-motion";
-import { Plus, Pencil, KeyRound, ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { Plus, Pencil, KeyRound, ChevronLeft, ChevronRight, Search, Eye, EyeOff } from "lucide-react";
 import { AdminRouteGuard } from "@/components/guards/admin-route-guard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -38,7 +38,7 @@ import {
 import { rolesService, type RoleItem } from "@/services/roles.service";
 import type { PaginatedResponse } from "@/types/api";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { ListFetchError } from "@/components/list-fetch-error";
 
 const createUserSchema = z
   .object({
@@ -47,54 +47,95 @@ const createUserSchema = z
     firstName: z.string().optional(),
     lastName: z.string().optional(),
     phone: z.string().optional(),
+    accountType: z.enum(["INDIVIDUAL", "COMPANY"]).default("INDIVIDUAL"),
+    companyName: z.string().optional(),
+    companyVatId: z.string().optional(),
+    companyTradeRegister: z.string().optional(),
     roleId: z.string().min(1, "Select a role"),
     isActive: z.boolean().optional(),
   })
-  .required({ email: true, password: true, roleId: true });
+  .required({ email: true, password: true, roleId: true })
+  .superRefine((data, ctx) => {
+    if (data.accountType === "COMPANY") {
+      if (!data.companyName?.trim()) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["companyName"], message: "Company name is required" });
+      }
+      if (!data.companyVatId?.trim()) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["companyVatId"], message: "VAT/CUI is required" });
+      }
+    }
+  });
 
 const editUserSchema = z.object({
   firstName: z.string().optional(),
   lastName: z.string().optional(),
   phone: z.string().optional(),
+  accountType: z.enum(["INDIVIDUAL", "COMPANY"]).default("INDIVIDUAL"),
+  companyName: z.string().optional(),
+  companyVatId: z.string().optional(),
+  companyTradeRegister: z.string().optional(),
   roleId: z.string().min(1, "Select a role"),
   isActive: z.boolean().optional(),
+}).superRefine((data, ctx) => {
+  if (data.accountType === "COMPANY") {
+    if (!data.companyName?.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["companyName"], message: "Company name is required" });
+    }
+    if (!data.companyVatId?.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["companyVatId"], message: "VAT/CUI is required" });
+    }
+  }
 });
 
 const resetPasswordSchema = z.object({
   newPassword: z.string().min(8, "At least 8 characters"),
 });
 
-type CreateUserForm = z.infer<typeof createUserSchema>;
-type EditUserForm = z.infer<typeof editUserSchema>;
+type CreateUserForm = z.input<typeof createUserSchema>;
+type EditUserForm = z.input<typeof editUserSchema>;
 type ResetPasswordForm = z.infer<typeof resetPasswordSchema>;
 
 function UsersContent() {
   const [data, setData] = useState<PaginatedResponse<UserListItem> | null>(null);
   const [roles, setRoles] = useState<RoleItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [page, setPage] = useState(0);
   const [limit] = useState(10);
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [searchDebounced, setSearchDebounced] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [selected, setSelected] = useState<UserListItem | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [showCreatePassword, setShowCreatePassword] = useState(false);
+  const [showResetPassword, setShowResetPassword] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearchDebounced(searchInput.trim()), 300);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [searchDebounced]);
 
   const fetchUsers = useCallback(() => {
     setLoading(true);
     usersService
-      .getList({ page: page + 1, limit, ...(search.trim() && { search: search.trim() }) })
-      .then(setData)
+      .getList({ page: page + 1, limit, ...(searchDebounced && { search: searchDebounced }) })
+      .then((response) => {
+        setData(response);
+        setLoadError(false);
+      })
       .catch(() => {
-        setData({
-          data: [],
-          meta: { total: 0, page: 1, limit, totalPages: 0, hasNext: false, hasPrev: false },
-        });
+        setData(null);
+        setLoadError(true);
         toast.error("Failed to load users");
       })
       .finally(() => setLoading(false));
-  }, [page, limit, search]);
+  }, [page, limit, searchDebounced]);
 
   useEffect(() => {
     fetchUsers();
@@ -112,6 +153,10 @@ function UsersContent() {
       firstName: "",
       lastName: "",
       phone: "",
+      accountType: "INDIVIDUAL",
+      companyName: "",
+      companyVatId: "",
+      companyTradeRegister: "",
       roleId: "",
       isActive: true,
     },
@@ -123,6 +168,10 @@ function UsersContent() {
       firstName: "",
       lastName: "",
       phone: "",
+      accountType: "INDIVIDUAL",
+      companyName: "",
+      companyVatId: "",
+      companyTradeRegister: "",
       roleId: "",
       isActive: true,
     },
@@ -139,6 +188,10 @@ function UsersContent() {
       firstName: user.firstName ?? "",
       lastName: user.lastName ?? "",
       phone: user.phone ?? "",
+      accountType: user.accountType ?? "INDIVIDUAL",
+      companyName: user.companyName ?? "",
+      companyVatId: user.companyVatId ?? "",
+      companyTradeRegister: user.companyTradeRegister ?? "",
       roleId: user.roleId,
       isActive: user.isActive,
     });
@@ -148,6 +201,7 @@ function UsersContent() {
   const openReset = (user: UserListItem) => {
     setSelected(user);
     resetForm.reset({ newPassword: "" });
+    setShowResetPassword(false);
     setResetOpen(true);
   };
 
@@ -155,17 +209,22 @@ function UsersContent() {
     setSubmitting(true);
     try {
       const createPayload: CreateUserPayload = {
+        accountType: payload.accountType ?? "INDIVIDUAL",
         email: payload.email,
         password: payload.password,
         firstName: payload.firstName || undefined,
         lastName: payload.lastName || undefined,
         phone: payload.phone || undefined,
+        companyName: payload.accountType === "COMPANY" ? payload.companyName || undefined : undefined,
+        companyVatId: payload.accountType === "COMPANY" ? payload.companyVatId || undefined : undefined,
+        companyTradeRegister: payload.accountType === "COMPANY" ? payload.companyTradeRegister || undefined : undefined,
         roleId: payload.roleId,
         isActive: payload.isActive ?? true,
       };
       await usersService.create(createPayload);
       toast.success("User created");
       setCreateOpen(false);
+      setShowCreatePassword(false);
       createForm.reset();
       fetchUsers();
     } catch (e: unknown) {
@@ -184,9 +243,13 @@ function UsersContent() {
     setSubmitting(true);
     try {
       const updatePayload: UpdateUserPayload = {
+        accountType: payload.accountType ?? "INDIVIDUAL",
         firstName: payload.firstName || undefined,
         lastName: payload.lastName || undefined,
         phone: payload.phone || undefined,
+        companyName: payload.accountType === "COMPANY" ? payload.companyName || undefined : undefined,
+        companyVatId: payload.accountType === "COMPANY" ? payload.companyVatId || undefined : undefined,
+        companyTradeRegister: payload.accountType === "COMPANY" ? payload.companyTradeRegister || undefined : undefined,
         roleId: payload.roleId,
         isActive: payload.isActive,
       };
@@ -241,6 +304,20 @@ function UsersContent() {
       accessorKey: "phone",
       header: "Phone",
       cell: ({ getValue }) => <span className="text-muted-foreground">{(getValue() as string) || "—"}</span>,
+    },
+    {
+      id: "accountType",
+      header: "Account",
+      cell: ({ row }) => (
+        <span className="text-muted-foreground">
+          {row.original.accountType === "COMPANY" ? "Company" : "Individual"}
+        </span>
+      ),
+    },
+    {
+      id: "companyVatId",
+      header: "CUI",
+      cell: ({ row }) => <span className="text-muted-foreground">{row.original.companyVatId || "—"}</span>,
     },
     {
       id: "role",
@@ -324,8 +401,8 @@ function UsersContent() {
               <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
                 className="rounded-2xl pl-9"
               />
             </div>
@@ -338,6 +415,8 @@ function UsersContent() {
                 <Skeleton key={i} className="h-12 w-full rounded-xl" />
               ))}
             </div>
+          ) : loadError ? (
+            <ListFetchError message="Could not load users." onRetry={fetchUsers} />
           ) : (
             <>
               <div className="overflow-x-auto rounded-2xl border border-border/60">
@@ -431,12 +510,22 @@ function UsersContent() {
             </div>
             <div>
               <Label htmlFor="create-password">Password</Label>
-              <Input
-                id="create-password"
-                type="password"
-                className="mt-1 rounded-2xl"
-                {...createForm.register("password")}
-              />
+              <div className="relative mt-1">
+                <Input
+                  id="create-password"
+                  type={showCreatePassword ? "text" : "password"}
+                  className="rounded-2xl pr-10"
+                  {...createForm.register("password")}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCreatePassword((prev) => !prev)}
+                  className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-muted-foreground hover:text-foreground"
+                  aria-label={showCreatePassword ? "Hide password" : "Show password"}
+                >
+                  {showCreatePassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </button>
+              </div>
               {createForm.formState.errors.password && (
                 <p className="text-destructive mt-1 text-sm">{createForm.formState.errors.password.message}</p>
               )}
@@ -455,6 +544,44 @@ function UsersContent() {
               <Label htmlFor="create-phone">Phone</Label>
               <Input id="create-phone" className="mt-1 rounded-2xl" {...createForm.register("phone")} />
             </div>
+            <div>
+              <Label htmlFor="create-accountType">Account type</Label>
+              <Select
+                id="create-accountType"
+                className="mt-1"
+                value={createForm.watch("accountType") ?? "INDIVIDUAL"}
+                onChange={(e) => createForm.setValue("accountType", e.target.value as "INDIVIDUAL" | "COMPANY")}
+              >
+                <option value="INDIVIDUAL">Individual</option>
+                <option value="COMPANY">Company</option>
+              </Select>
+            </div>
+            {(createForm.watch("accountType") ?? "INDIVIDUAL") === "COMPANY" && (
+              <div className="grid grid-cols-1 gap-2">
+                <div>
+                  <Label htmlFor="create-companyName">Company name</Label>
+                  <Input id="create-companyName" className="mt-1 rounded-2xl" {...createForm.register("companyName")} />
+                  {createForm.formState.errors.companyName && (
+                    <p className="text-destructive mt-1 text-sm">{createForm.formState.errors.companyName.message}</p>
+                  )}
+                </div>
+                <div>
+                  <Label htmlFor="create-companyVatId">CUI / VAT</Label>
+                  <Input id="create-companyVatId" className="mt-1 rounded-2xl" {...createForm.register("companyVatId")} />
+                  {createForm.formState.errors.companyVatId && (
+                    <p className="text-destructive mt-1 text-sm">{createForm.formState.errors.companyVatId.message}</p>
+                  )}
+                </div>
+                <div>
+                  <Label htmlFor="create-companyTradeRegister">Trade register</Label>
+                  <Input
+                    id="create-companyTradeRegister"
+                    className="mt-1 rounded-2xl"
+                    {...createForm.register("companyTradeRegister")}
+                  />
+                </div>
+              </div>
+            )}
             <div>
               <Label htmlFor="create-roleId">Role</Label>
               <Select
@@ -516,6 +643,44 @@ function UsersContent() {
               <Input id="edit-phone" className="mt-1 rounded-2xl" {...editForm.register("phone")} />
             </div>
             <div>
+              <Label htmlFor="edit-accountType">Account type</Label>
+              <Select
+                id="edit-accountType"
+                className="mt-1"
+                value={editForm.watch("accountType") ?? "INDIVIDUAL"}
+                onChange={(e) => editForm.setValue("accountType", e.target.value as "INDIVIDUAL" | "COMPANY")}
+              >
+                <option value="INDIVIDUAL">Individual</option>
+                <option value="COMPANY">Company</option>
+              </Select>
+            </div>
+            {(editForm.watch("accountType") ?? "INDIVIDUAL") === "COMPANY" && (
+              <div className="grid grid-cols-1 gap-2">
+                <div>
+                  <Label htmlFor="edit-companyName">Company name</Label>
+                  <Input id="edit-companyName" className="mt-1 rounded-2xl" {...editForm.register("companyName")} />
+                  {editForm.formState.errors.companyName && (
+                    <p className="text-destructive mt-1 text-sm">{editForm.formState.errors.companyName.message}</p>
+                  )}
+                </div>
+                <div>
+                  <Label htmlFor="edit-companyVatId">CUI / VAT</Label>
+                  <Input id="edit-companyVatId" className="mt-1 rounded-2xl" {...editForm.register("companyVatId")} />
+                  {editForm.formState.errors.companyVatId && (
+                    <p className="text-destructive mt-1 text-sm">{editForm.formState.errors.companyVatId.message}</p>
+                  )}
+                </div>
+                <div>
+                  <Label htmlFor="edit-companyTradeRegister">Trade register</Label>
+                  <Input
+                    id="edit-companyTradeRegister"
+                    className="mt-1 rounded-2xl"
+                    {...editForm.register("companyTradeRegister")}
+                  />
+                </div>
+              </div>
+            )}
+            <div>
               <Label htmlFor="edit-roleId">Role</Label>
               <Select
                 id="edit-roleId"
@@ -559,12 +724,22 @@ function UsersContent() {
           <form onSubmit={resetForm.handleSubmit(handleResetPassword)} className="space-y-4">
             <div>
               <Label htmlFor="reset-newPassword">New password</Label>
-              <Input
-                id="reset-newPassword"
-                type="password"
-                className="mt-1 rounded-2xl"
-                {...resetForm.register("newPassword")}
-              />
+              <div className="relative mt-1">
+                <Input
+                  id="reset-newPassword"
+                  type={showResetPassword ? "text" : "password"}
+                  className="rounded-2xl pr-10"
+                  {...resetForm.register("newPassword")}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowResetPassword((prev) => !prev)}
+                  className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-muted-foreground hover:text-foreground"
+                  aria-label={showResetPassword ? "Hide password" : "Show password"}
+                >
+                  {showResetPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </button>
+              </div>
               {resetForm.formState.errors.newPassword && (
                 <p className="text-destructive mt-1 text-sm">{resetForm.formState.errors.newPassword.message}</p>
               )}

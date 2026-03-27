@@ -1,9 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { LogOut, Moon, Sun } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/store/auth-store";
+import { authService } from "@/services/auth.service";
 import { SidebarTrigger } from "./sidebar";
 
 export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
@@ -11,7 +12,12 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await authService.logout();
+    } catch {
+      // Ignore API failures and clear local state regardless.
+    }
     logout();
     router.push("/login");
   };

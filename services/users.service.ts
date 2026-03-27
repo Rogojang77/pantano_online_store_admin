@@ -7,6 +7,10 @@ export interface UserListItem {
   firstName: string | null;
   lastName: string | null;
   phone: string | null;
+  accountType?: "INDIVIDUAL" | "COMPANY";
+  companyName?: string | null;
+  companyVatId?: string | null;
+  companyTradeRegister?: string | null;
   isActive: boolean;
   lastLoginAt: string | null;
   createdAt: string;
@@ -21,6 +25,10 @@ export interface CreateUserPayload {
   firstName?: string;
   lastName?: string;
   phone?: string;
+  accountType?: "INDIVIDUAL" | "COMPANY";
+  companyName?: string;
+  companyVatId?: string;
+  companyTradeRegister?: string;
   roleId: string;
   isActive?: boolean;
 }
@@ -29,6 +37,10 @@ export interface UpdateUserPayload {
   firstName?: string;
   lastName?: string;
   phone?: string;
+  accountType?: "INDIVIDUAL" | "COMPANY";
+  companyName?: string;
+  companyVatId?: string;
+  companyTradeRegister?: string;
   roleId?: string;
   isActive?: boolean;
 }

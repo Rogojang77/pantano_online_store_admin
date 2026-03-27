@@ -32,10 +32,13 @@ import {
   type OrderListItem,
   type OrderStatus,
   type OrderType,
+  type PaymentStatus,
 } from "@/services/orders.service";
 import type { PaginatedResponse } from "@/types/api";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import api from "@/services/api";
+import { ListFetchError } from "@/components/list-fetch-error";
 
 const STATUS_OPTIONS: OrderStatus[] = [
   "PENDING",
@@ -55,6 +58,13 @@ const statusVariant: Record<OrderStatus, "default" | "secondary" | "success" | "
   CANCELLED: "destructive",
 };
 
+const paymentStatusVariant: Record<PaymentStatus, "default" | "secondary" | "success" | "destructive" | "warning" | "outline"> = {
+  PENDING: "warning",
+  PAID: "success",
+  FAILED: "destructive",
+  REFUNDED: "outline",
+};
+
 function formatMoney(val: string | number): string {
   const n = typeof val === "string" ? parseFloat(val) : val;
   return Number.isNaN(n) ? "—" : new Intl.NumberFormat("ro-RO", { style: "currency", currency: "RON" }).format(n);
@@ -63,6 +73,7 @@ function formatMoney(val: string | number): string {
 export default function OrdersPage() {
   const [data, setData] = useState<PaginatedResponse<OrderListItem> | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [sorting, setSorting] = useState<SortingState>([]);
   const [page, setPage] = useState(0);
   const [limit] = useState(10);
@@ -70,11 +81,24 @@ export default function OrdersPage() {
   const [typeFilter, setTypeFilter] = useState<string>("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [searchDebounced, setSearchDebounced] = useState("");
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<OrderListItem | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [statusUpdating, setStatusUpdating] = useState(false);
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [pendingCancelledOrderId, setPendingCancelledOrderId] = useState<string | null>(null);
+  const [printingInvoiceId, setPrintingInvoiceId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearchDebounced(searchInput.trim()), 300);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [searchDebounced]);
 
   const fetchOrders = useCallback(() => {
     setLoading(true);
@@ -85,17 +109,21 @@ export default function OrdersPage() {
       ...(typeFilter && { type: typeFilter }),
       ...(fromDate && { from: fromDate }),
       ...(toDate && { to: toDate }),
-      ...(search.trim() && { search: search.trim() }),
+      ...(searchDebounced && { search: searchDebounced }),
     };
     ordersService
       .getList(params)
-      .then(setData)
+      .then((response) => {
+        setData(response);
+        setLoadError(false);
+      })
       .catch(() => {
-        setData({ data: [], meta: { total: 0, page: 1, limit, totalPages: 0, hasNext: false, hasPrev: false } });
+        setData(null);
+        setLoadError(true);
         toast.error("Failed to load orders");
       })
       .finally(() => setLoading(false));
-  }, [page, limit, statusFilter, typeFilter, fromDate, toDate, search]);
+  }, [page, limit, statusFilter, typeFilter, fromDate, toDate, searchDebounced]);
 
   useEffect(() => {
     fetchOrders();
@@ -133,6 +161,49 @@ export default function OrdersPage() {
     [fetchOrders]
   );
 
+  const handleStatusSelectChange = useCallback(
+    (orderId: string, newStatus: OrderStatus) => {
+      if (newStatus === "CANCELLED") {
+        setPendingCancelledOrderId(orderId);
+        setCancelConfirmOpen(true);
+        return;
+      }
+      void handleStatusChange(orderId, newStatus);
+    },
+    [handleStatusChange]
+  );
+
+  const confirmCancelStatusChange = useCallback(async () => {
+    if (!pendingCancelledOrderId) return;
+    await handleStatusChange(pendingCancelledOrderId, "CANCELLED");
+    setCancelConfirmOpen(false);
+    setPendingCancelledOrderId(null);
+  }, [pendingCancelledOrderId, handleStatusChange]);
+
+  const handlePrintInvoice = useCallback(async (order: OrderListItem) => {
+    if (!order.invoice?.odooInvoiceId || !order.invoice?.id) {
+      toast.error("Invoice can be printed only after it is available from Odoo");
+      return;
+    }
+
+    setPrintingInvoiceId(order.invoice.id);
+    try {
+      const response = await api.get<Blob>(`/invoices/${order.invoice.id}/download`, {
+        responseType: "blob",
+      });
+      const pdfUrl = URL.createObjectURL(response.data);
+      const popup = window.open(pdfUrl, "_blank", "noopener,noreferrer");
+      if (!popup) {
+        window.location.href = pdfUrl;
+      }
+      window.setTimeout(() => URL.revokeObjectURL(pdfUrl), 60000);
+    } catch {
+      toast.error("Failed to load Odoo invoice PDF");
+    } finally {
+      setPrintingInvoiceId(null);
+    }
+  }, []);
+
   const columns: ColumnDef<OrderListItem>[] = [
     {
       accessorKey: "orderNumber",
@@ -164,6 +235,18 @@ export default function OrdersPage() {
       ),
     },
     {
+      accessorKey: "paymentStatus",
+      header: "Payment",
+      cell: ({ getValue }) => {
+        const value = getValue() as string;
+        return (
+          <Badge variant={paymentStatusVariant[value as PaymentStatus] ?? "secondary"}>
+            {value.replace(/_/g, " ")}
+          </Badge>
+        );
+      },
+    },
+    {
       id: "customer",
       header: "Customer",
       cell: ({ row }) => {
@@ -192,17 +275,35 @@ export default function OrdersPage() {
     {
       id: "actions",
       header: "",
-      cell: ({ row }) => (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-8 rounded-xl"
-          onClick={() => openDetails(row.original)}
-          aria-label="View details"
-        >
-          <Eye className="size-4" />
-        </Button>
-      ),
+      cell: ({ row }) => {
+        const canPrint = Boolean(row.original.invoice?.odooInvoiceId);
+        return (
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8 rounded-xl"
+              onClick={() => openDetails(row.original)}
+              aria-label="View details"
+            >
+              <Eye className="size-4" />
+            </Button>
+            {canPrint && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8 rounded-xl"
+                onClick={() => handlePrintInvoice(row.original)}
+                aria-label="Print invoice"
+                title="Print invoice"
+                disabled={printingInvoiceId === row.original.invoice?.id}
+              >
+                <Printer className="size-4" />
+              </Button>
+            )}
+          </div>
+        );
+      },
     },
   ];
 
@@ -217,6 +318,7 @@ export default function OrdersPage() {
     manualPagination: true,
     pageCount: data?.meta.totalPages ?? 0,
   });
+  const canPrintInvoiceFromOdoo = Boolean(selectedOrder?.invoice?.odooInvoiceId);
 
   return (
     <motion.div
@@ -239,8 +341,8 @@ export default function OrdersPage() {
               <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
                 className="rounded-2xl pl-9"
               />
             </div>
@@ -299,6 +401,8 @@ export default function OrdersPage() {
                 <Skeleton key={i} className="h-12 w-full rounded-xl" />
               ))}
             </div>
+          ) : loadError ? (
+            <ListFetchError message="Could not load orders." onRetry={fetchOrders} />
           ) : (
             <>
               <div className="overflow-x-auto rounded-2xl border border-border/60">
@@ -394,6 +498,9 @@ export default function OrdersPage() {
                   {selectedOrder.status.replace(/_/g, " ")}
                 </Badge>
                 <Badge variant="outline">{selectedOrder.type}</Badge>
+                <Badge variant={paymentStatusVariant[selectedOrder.paymentStatus as PaymentStatus] ?? "secondary"}>
+                  PAYMENT: {selectedOrder.paymentStatus.replace(/_/g, " ")}
+                </Badge>
               </div>
               <div>
                 <p className="text-muted-foreground text-xs">Customer</p>
@@ -456,7 +563,7 @@ export default function OrdersPage() {
                 <Label className="text-xs">Change status</Label>
                 <Select
                   value={selectedOrder.status}
-                  onChange={(e) => handleStatusChange(selectedOrder.id, e.target.value as OrderStatus)}
+                  onChange={(e) => handleStatusSelectChange(selectedOrder.id, e.target.value as OrderStatus)}
                   disabled={statusUpdating}
                   className="mt-1 w-full rounded-2xl"
                 >
@@ -465,19 +572,65 @@ export default function OrdersPage() {
                   ))}
                 </Select>
               </div>
+              {!canPrintInvoiceFromOdoo && (
+                <p className="text-xs text-muted-foreground">
+                  Invoice can be printed only after it is available from Odoo.
+                </p>
+              )}
             </div>
           ) : null}
           <DialogFooter className="print:hidden">
+            {canPrintInvoiceFromOdoo && (
+              <Button
+                variant="outline"
+                className="rounded-xl"
+                onClick={() => selectedOrder && void handlePrintInvoice(selectedOrder)}
+                disabled={printingInvoiceId === selectedOrder?.invoice?.id}
+              >
+                <Printer className="size-4 mr-2" />
+                {printingInvoiceId === selectedOrder?.invoice?.id ? "Loading invoice..." : "Print Odoo invoice"}
+              </Button>
+            )}
+            <Button variant="outline" className="rounded-xl" onClick={() => setDetailsOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={cancelConfirmOpen}
+        onOpenChange={(open) => {
+          setCancelConfirmOpen(open);
+          if (!open) {
+            setPendingCancelledOrderId(null);
+          }
+        }}
+      >
+        <DialogContent className="rounded-2xl sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cancel order?</DialogTitle>
+            <DialogDescription>
+              This will change the order status to CANCELLED. Confirm only if the order should no longer be processed.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
             <Button
               variant="outline"
               className="rounded-xl"
-              onClick={() => window.print()}
+              onClick={() => {
+                setCancelConfirmOpen(false);
+                setPendingCancelledOrderId(null);
+              }}
             >
-              <Printer className="size-4 mr-2" />
-              Print
+              Keep current status
             </Button>
-            <Button variant="outline" className="rounded-xl" onClick={() => setDetailsOpen(false)}>
-              Close
+            <Button
+              variant="destructive"
+              className="rounded-xl"
+              onClick={() => void confirmCancelStatusChange()}
+              disabled={statusUpdating || !pendingCancelledOrderId}
+            >
+              {statusUpdating ? "Updating..." : "Confirm cancel"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,20 +1,21 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import type { AxiosError } from "axios";
 import { motion } from "framer-motion";
 import {
   RefreshCw,
   CheckCircle2,
   AlertCircle,
   Search,
-  ChevronLeft,
-  ChevronRight,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Select } from "@/components/ui/select";
+import { TablePagination } from "@/components/ui/table-pagination";
 import { inventoryService, type InventoryListItem } from "@/services/inventory.service";
 import { odooService } from "@/services/odoo.service";
 import type { SyncState } from "@/types/odoo";
@@ -22,6 +23,7 @@ import type { PaginatedResponse } from "@/types/api";
 import { useCanAccessAdminSection } from "@/hooks/use-role-guard";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { ListFetchError } from "@/components/list-fetch-error";
 
 const LOW_STOCK_THRESHOLD = 5;
 
@@ -29,28 +31,63 @@ export default function InventoryPage() {
   const isAdmin = useCanAccessAdminSection();
   const [data, setData] = useState<PaginatedResponse<InventoryListItem> | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [page, setPage] = useState(0);
   const [limit] = useState(15);
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [searchDebounced, setSearchDebounced] = useState("");
+  const [stockStatus, setStockStatus] = useState<"all" | "in_stock" | "low_stock" | "out_of_stock">("all");
+  const [sortBy, setSortBy] = useState<"productName" | "sku" | "stockQuantity" | "reservedQuantity" | "lastSyncedAt">("lastSyncedAt");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [syncStatus, setSyncStatus] = useState<SyncState | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [newStock, setNewStock] = useState<Record<string, number | "">>({});
+  const hasLoadedRef = useRef(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearchDebounced(searchInput.trim()), 300);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [searchDebounced, stockStatus, sortBy, sortDir]);
 
   const fetchInventory = useCallback(() => {
-    setLoading(true);
+    const isInitialLoad = !hasLoadedRef.current;
+    if (isInitialLoad) {
+      setLoading(true);
+    } else {
+      setIsRefreshing(true);
+    }
     inventoryService
-      .getList({ page: page + 1, limit, ...(search.trim() && { search: search.trim() }) })
-      .then(setData)
+      .getList({
+        page: page + 1,
+        limit,
+        ...(searchDebounced && { search: searchDebounced }),
+        ...(stockStatus !== "all" && { stockStatus }),
+        ...(sortBy !== "lastSyncedAt" && { sortBy }),
+        ...(sortDir !== "desc" && { sortDir }),
+      })
+      .then((response) => {
+        setData(response);
+        setLoadError(false);
+      })
       .catch(() => {
-        setData({
-          data: [],
-          meta: { total: 0, page: 1, limit, totalPages: 0, hasNext: false, hasPrev: false },
-        });
+        if (!hasLoadedRef.current) {
+          setData(null);
+        }
+        setLoadError(true);
         toast.error("Failed to load inventory");
       })
-      .finally(() => setLoading(false));
-  }, [page, limit, search]);
+      .finally(() => {
+        hasLoadedRef.current = true;
+        setLoading(false);
+        setIsRefreshing(false);
+      });
+  }, [page, limit, searchDebounced, stockStatus, sortBy, sortDir]);
 
   const loadSyncStatus = useCallback(() => {
     odooService.getSyncStatus().then(setSyncStatus).catch(() => setSyncStatus({ status: "IDLE" }));
@@ -94,8 +131,8 @@ export default function InventoryPage() {
       await inventoryService.setProductStock(productId, Number(value));
       toast.success("Stock updated and synced to Odoo");
       fetchInventory();
-    } catch {
-      toast.error("Failed to update stock");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Failed to update stock in Odoo"));
     } finally {
       setUpdatingId(null);
     }
@@ -183,8 +220,8 @@ export default function InventoryPage() {
               <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search by SKU or name..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
                 className="rounded-2xl pl-9"
               />
             </div>
@@ -199,6 +236,46 @@ export default function InventoryPage() {
             </div>
           ) : (
             <>
+              {loadError && (
+                <div className="mb-4">
+                  <ListFetchError message="Could not load inventory." onRetry={fetchInventory} />
+                </div>
+              )}
+              <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+                <Select
+                  className="rounded-2xl"
+                  value={stockStatus}
+                  onChange={(e) => setStockStatus(e.target.value as "all" | "in_stock" | "low_stock" | "out_of_stock")}
+                >
+                  <option value="all">All stock states</option>
+                  <option value="in_stock">In stock (&gt; 5)</option>
+                  <option value="low_stock">Low stock (1-5)</option>
+                  <option value="out_of_stock">Out of stock (0)</option>
+                </Select>
+                <Select
+                  className="rounded-2xl"
+                  value={sortBy}
+                  onChange={(e) =>
+                    setSortBy(
+                      e.target.value as "productName" | "sku" | "stockQuantity" | "reservedQuantity" | "lastSyncedAt"
+                    )
+                  }
+                >
+                  <option value="lastSyncedAt">Sort by last sync</option>
+                  <option value="productName">Sort by product name</option>
+                  <option value="sku">Sort by SKU</option>
+                  <option value="stockQuantity">Sort by stock qty</option>
+                  <option value="reservedQuantity">Sort by reserved qty</option>
+                </Select>
+                <Select
+                  className="rounded-2xl"
+                  value={sortDir}
+                  onChange={(e) => setSortDir(e.target.value as "asc" | "desc")}
+                >
+                  <option value="desc">Desc</option>
+                  <option value="asc">Asc</option>
+                </Select>
+              </div>
               <div className="overflow-x-auto rounded-2xl border border-border/60">
                 <table className="w-full text-left text-sm">
                   <thead>
@@ -215,7 +292,7 @@ export default function InventoryPage() {
                   <tbody>
                     {!data?.data?.length ? (
                       <tr>
-                        <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
+                        <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
                           No inventory data. Run a sync from Odoo Integration (Admin).
                         </td>
                       </tr>
@@ -255,11 +332,6 @@ export default function InventoryPage() {
                               </Badge>
                             )}
                           </td>
-                          <td className="px-4 py-3 text-muted-foreground">
-                            {r.lastSyncedAt
-                              ? new Date(r.lastSyncedAt).toLocaleString()
-                              : "—"}
-                          </td>
                           <td className="px-4 py-3 text-right">
                             {isAdmin ? (
                               <div className="flex items-center justify-end gap-2">
@@ -282,6 +354,11 @@ export default function InventoryPage() {
                               <span className="text-xs text-muted-foreground">View only</span>
                             )}
                           </td>
+                          <td className="px-4 py-3 text-muted-foreground">
+                            {r.lastSyncedAt
+                              ? new Date(r.lastSyncedAt).toLocaleString()
+                              : "—"}
+                          </td>
                         </tr>
                       ))
                     )}
@@ -293,27 +370,15 @@ export default function InventoryPage() {
                   <p className="text-sm text-muted-foreground">
                     Page {page + 1} of {data.meta.totalPages} · {data.meta.total} total
                   </p>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="rounded-xl"
-                      onClick={() => setPage((p) => Math.max(0, p - 1))}
-                      disabled={!data.meta.hasPrev}
-                    >
-                      <ChevronLeft className="size-4" />
-                      Previous
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="rounded-xl"
-                      onClick={() => setPage((p) => p + 1)}
-                      disabled={!data.meta.hasNext}
-                    >
-                      Next
-                      <ChevronRight className="size-4" />
-                    </Button>
+                  <div className="flex items-center gap-3">
+                    {isRefreshing && (
+                      <span className="text-xs text-muted-foreground">Updating...</span>
+                    )}
+                    <TablePagination
+                      page={page}
+                      totalPages={data.meta.totalPages}
+                      onPageChange={setPage}
+                    />
                   </div>
                 </div>
               )}
@@ -323,4 +388,15 @@ export default function InventoryPage() {
       </Card>
     </motion.div>
   );
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  const responseMessage = (error as AxiosError<{ message?: string | string[] }>)?.response?.data?.message;
+  if (Array.isArray(responseMessage)) {
+    return responseMessage.join(", ");
+  }
+  if (typeof responseMessage === "string" && responseMessage.trim()) {
+    return responseMessage;
+  }
+  return fallback;
 }

@@ -18,7 +18,7 @@ export interface UserProfile {
 }
 
 export interface TokenResponse {
-  accessToken: string;
+  accessToken?: string;
   /** Token lifetime: number of seconds (preferred) or string e.g. '7d' */
   expiresIn: number | string;
   user: {

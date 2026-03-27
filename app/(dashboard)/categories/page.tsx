@@ -39,6 +39,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Select } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { categoriesService, type CategoryItem, type CreateCategoryPayload } from "@/services/categories.service";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -492,6 +493,15 @@ export default function CategoriesPage() {
     return result;
   }, [flat, levelFilter]);
 
+  const mergeSourceCategory = useMemo(
+    () => flat.find((c) => c.id === mergeSource) ?? null,
+    [flat, mergeSource]
+  );
+  const mergeTargetCategory = useMemo(
+    () => flat.find((c) => c.id === mergeTarget) ?? null,
+    [flat, mergeTarget]
+  );
+
   const tree = useMemo(() => buildTree(filteredFlat), [filteredFlat]);
   const filteredTree = useMemo(() => filterTree(tree, search), [tree, search]);
   const parentOptions = useMemo(() => {
@@ -629,18 +639,36 @@ export default function CategoriesPage() {
     }
   };
 
-  const handleMerge = async (sourceId: string, targetId: string) => {
+  const handleMerge = async (sourceId: string, targetId: string): Promise<boolean> => {
     setSubmitting(true);
     try {
       const result = await categoriesService.merge(sourceId, targetId);
       toast.success(`Unire reușită: ${result.productsReassigned} produse mutate`);
       loadCategories();
       loadDuplicates();
+      return true;
     } catch (e: unknown) {
       const msg = e && typeof e === "object" && "message" in e ? String((e as { message: unknown }).message) : "Unire eșuată";
       toast.error(msg);
+      return false;
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const requestMerge = (sourceId: string, targetId: string) => {
+    setMergeSource(sourceId);
+    setMergeTarget(targetId);
+    setMergeOpen(true);
+  };
+
+  const handleMergeConfirm = async () => {
+    if (!mergeSource || !mergeTarget) return;
+    const success = await handleMerge(mergeSource, mergeTarget);
+    if (success) {
+      setMergeOpen(false);
+      setMergeSource(null);
+      setMergeTarget(null);
     }
   };
 
@@ -856,13 +884,56 @@ export default function CategoriesPage() {
             <CardContent>
               <DuplicatesPanel
                 duplicates={duplicates}
-                onMerge={handleMerge}
+                onMerge={requestMerge}
                 loading={duplicatesLoading}
               />
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
+
+      <Dialog
+        open={mergeOpen}
+        onOpenChange={(open) => {
+          setMergeOpen(open);
+          if (!open) {
+            setMergeSource(null);
+            setMergeTarget(null);
+          }
+        }}
+      >
+        <DialogContent className="rounded-2xl sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmă unirea categoriilor</DialogTitle>
+            <DialogDescription>
+              Această acțiune mută produsele din{" "}
+              <span className="font-medium">{mergeSourceCategory?.name ?? "categoria sursă"}</span> în{" "}
+              <span className="font-medium">{mergeTargetCategory?.name ?? "categoria țintă"}</span>.
+              Verifică atent înainte de confirmare.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              className="rounded-xl"
+              onClick={() => {
+                setMergeOpen(false);
+                setMergeSource(null);
+                setMergeTarget(null);
+              }}
+            >
+              Anulează
+            </Button>
+            <Button
+              className="rounded-xl"
+              onClick={() => void handleMergeConfirm()}
+              disabled={submitting || !mergeSource || !mergeTarget}
+            >
+              {submitting ? <Loader2 className="size-4 animate-spin" /> : "Confirmă unirea"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent className="rounded-2xl sm:max-w-lg">
@@ -901,18 +972,18 @@ export default function CategoriesPage() {
               </div>
               <div className="sm:col-span-2">
                 <Label htmlFor="add-parent">Părinte</Label>
-                <Select
+                <SearchableSelect
                   id="add-parent"
                   className="mt-1 rounded-xl"
                   value={addForm.watch("parentId") ?? ""}
                   onChange={(e) => addForm.setValue("parentId", e.target.value || null)}
-                >
-                  {parentOptions.map((o) => (
-                    <option key={o.value || "root"} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </Select>
+                  options={parentOptions.map((o) => ({
+                    value: o.value,
+                    label: o.label,
+                  }))}
+                  placeholder="— Rădăcină —"
+                  searchPlaceholder="Caută părinte..."
+                />
               </div>
             </div>
             <div className="flex items-center gap-4">
@@ -977,20 +1048,20 @@ export default function CategoriesPage() {
               </div>
               <div className="sm:col-span-2">
                 <Label htmlFor="edit-parent">Părinte</Label>
-                <Select
+                <SearchableSelect
                   id="edit-parent"
                   className="mt-1 rounded-xl"
                   value={editForm.watch("parentId") ?? ""}
                   onChange={(e) => editForm.setValue("parentId", e.target.value || null)}
-                >
-                  {parentOptions
+                  options={parentOptions
                     .filter((o) => o.value !== selected?.id)
-                    .map((o) => (
-                      <option key={o.value || "root"} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                </Select>
+                    .map((o) => ({
+                      value: o.value,
+                      label: o.label,
+                    }))}
+                  placeholder="— Rădăcină —"
+                  searchPlaceholder="Caută părinte..."
+                />
               </div>
             </div>
             <div className="flex items-center gap-4">
@@ -1050,20 +1121,20 @@ export default function CategoriesPage() {
           </DialogHeader>
           <div className="py-4">
             <Label htmlFor="bulk-parent">Noul părinte</Label>
-            <Select
+            <SearchableSelect
               id="bulk-parent"
               className="mt-2 rounded-xl"
               defaultValue=""
               onChange={(e) => handleBulkMove(e.target.value || null)}
-            >
-              {parentOptions
+              options={parentOptions
                 .filter((o) => !selectedIds.has(o.value))
-                .map((o) => (
-                  <option key={o.value || "root"} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-            </Select>
+                .map((o) => ({
+                  value: o.value,
+                  label: o.label,
+                }))}
+              placeholder="— Rădăcină —"
+              searchPlaceholder="Caută părinte..."
+            />
           </div>
           <DialogFooter>
             <Button variant="outline" className="rounded-xl" onClick={() => setBulkMoveOpen(false)}>

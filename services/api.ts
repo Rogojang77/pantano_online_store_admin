@@ -7,11 +7,10 @@ const api = axios.create({
   baseURL: API_BASE_URL,
   headers: { "Content-Type": "application/json" },
   timeout: 30000,
+  withCredentials: true,
 });
 
 api.interceptors.request.use((config) => {
-  const token = useAuthStore.getState().accessToken;
-  if (token) config.headers.Authorization = `Bearer ${token}`;
   // Let the browser set Content-Type with boundary for FormData (multipart)
   if (typeof FormData !== "undefined" && config.data instanceof FormData) {
     delete config.headers["Content-Type"];
@@ -25,14 +24,9 @@ api.interceptors.response.use(
     const status = err.response?.status;
     const isLoginRequest = err.config?.url?.includes("/auth/login");
     if (status === 401 && !isLoginRequest) {
-      useAuthStore.getState().logout();
+      useAuthStore.getState().clearAuth();
       if (typeof window !== "undefined") {
         window.location.href = "/login";
-      }
-    }
-    if (status === 403) {
-      if (typeof window !== "undefined") {
-        window.location.href = "/dashboard";
       }
     }
     return Promise.reject(err);

@@ -2,6 +2,7 @@ import api from "./api";
 import type {
   OdooConfig,
   OdooConnectionTestResult,
+  OdooPreviewProductsResponse,
   SyncState,
   SyncLogEntry,
   WebhookConfig,
@@ -15,6 +16,17 @@ type BackendOdooConfig = {
   username?: string;
   isConfigured: boolean;
   hasApiKey: boolean;
+};
+
+type OdooSupplierLookupItem = {
+  odooId: number;
+  found: boolean;
+  partnerId: number | null;
+  partnerName: string | null;
+  minQty: number | null;
+  price: number | null;
+  currencyName: string | null;
+  active: boolean | null;
 };
 
 const mapBackendConfigToFrontend = (backend: BackendOdooConfig): OdooConfig => ({
@@ -51,6 +63,36 @@ export const odooService = {
     api
       .post<OdooConnectionTestResult>(`${BASE}/test-connection`)
       .then((r) => r.data),
+
+  getProductsPreview: (params?: { limit?: number; offset?: number }) =>
+    api
+      .get<OdooPreviewProductsResponse>(`${BASE}/products/preview`, { params })
+      .then((r) => r.data),
+
+  getSupplierNamesByOdooIds: async (odooIds: number[]): Promise<Record<number, string>> => {
+    const uniqueIds = Array.from(
+      new Set(
+        odooIds.filter((id) => Number.isInteger(id) && id > 0)
+      )
+    );
+    if (!uniqueIds.length) {
+      return {};
+    }
+
+    const response = await api.get<{ items: OdooSupplierLookupItem[] }>(`${BASE}/suppliers`, {
+      params: { odooIds: uniqueIds.join(",") },
+    });
+
+    const lookup: Record<number, string> = {};
+    for (const item of response.data.items) {
+      const sellerName = item.partnerName?.trim();
+      if (item.found && sellerName) {
+        lookup[item.odooId] = sellerName;
+      }
+    }
+
+    return lookup;
+  },
 
   triggerSync: (type: "products" | "stock" | "categories" | "full") =>
     api.post<{ jobId: string }>(`${BASE}/sync`, { type }).then((r) => r.data),

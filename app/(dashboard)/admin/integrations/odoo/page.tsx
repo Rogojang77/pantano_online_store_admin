@@ -1,16 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { motion } from "framer-motion";
 import {
-  Copy,
-  Check,
-  Play,
   RotateCcw,
-  AlertCircle,
   Loader2,
   ChevronDown,
   ChevronRight,
@@ -18,81 +11,41 @@ import {
 import { AdminRouteGuard } from "@/components/guards/admin-route-guard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { odooService } from "@/services/odoo.service";
-import type { OdooConfig, OdooConnectionTestResult, SyncState, SyncLogEntry, WebhookConfig } from "@/types/odoo";
+import type {
+  OdooConfig,
+  OdooPreviewProduct,
+  SyncState,
+  SyncLogEntry,
+} from "@/types/odoo";
 import { cn } from "@/lib/utils";
-
-const configSchema = z.object({
-  baseUrl: z.string().url("Invalid URL").or(z.literal("")),
-  database: z.string().min(1, "Required"),
-  username: z.string().min(1, "Required"),
-  password: z.string().optional(),
-  apiKey: z.string().optional(),
-  timeoutMs: z.number().min(1000).max(60000),
-  syncIntervalCron: z.string().min(1, "Required"),
-});
-
-type ConfigFormData = z.infer<typeof configSchema>;
-
-const defaultConfig: ConfigFormData = {
-  baseUrl: "",
-  database: "",
-  username: "",
-  password: "",
-  apiKey: "",
-  timeoutMs: 10000,
-  syncIntervalCron: "0 * * * *",
-};
 
 function OdooIntegrationContent() {
   const [config, setConfig] = useState<OdooConfig | null>(null);
   const [configLoading, setConfigLoading] = useState(true);
-  const [testResult, setTestResult] = useState<OdooConnectionTestResult | null>(null);
-  const [testing, setTesting] = useState(false);
   const [syncState, setSyncState] = useState<SyncState | null>(null);
   const [logs, setLogs] = useState<SyncLogEntry[]>([]);
   const [logsExpanded, setLogsExpanded] = useState<Record<string, boolean>>({});
-  const [webhook, setWebhook] = useState<WebhookConfig | null>(null);
-  const [copied, setCopied] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
-
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors, isDirty },
-  } = useForm<ConfigFormData>({
-    resolver: zodResolver(configSchema),
-    defaultValues: defaultConfig,
-  });
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewProducts, setPreviewProducts] = useState<OdooPreviewProduct[]>([]);
+  const [previewFields, setPreviewFields] = useState<string[]>([]);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   const loadConfig = useCallback(async () => {
     setConfigLoading(true);
     try {
       const data = await odooService.getConfig();
       setConfig(data);
-      reset({
-        baseUrl: data.baseUrl || "",
-        database: data.database || "",
-        username: data.username || "",
-        password: "",
-        apiKey: data.apiKey || "",
-        timeoutMs: data.timeoutMs ?? 10000,
-        syncIntervalCron: data.syncIntervalCron || "0 * * * *",
-      });
     } catch {
-      reset(defaultConfig);
+      setConfig(null);
     } finally {
       setConfigLoading(false);
     }
-  }, [reset]);
+  }, []);
 
   const loadSyncStatus = useCallback(async () => {
     try {
@@ -108,16 +61,7 @@ function OdooIntegrationContent() {
       const { logs: list } = await odooService.getLogs({ limit: 50 });
       setLogs(list);
     } catch {
-      setLogs([]);
-    }
-  }, []);
-
-  const loadWebhook = useCallback(async () => {
-    try {
-      const data = await odooService.getWebhookConfig();
-      setWebhook(data);
-    } catch {
-      setWebhook(null);
+      // Keep last known logs on transient polling/network failures.
     }
   }, []);
 
@@ -125,52 +69,36 @@ function OdooIntegrationContent() {
     loadConfig();
     loadSyncStatus();
     loadLogs();
-    loadWebhook();
-  }, [loadConfig, loadSyncStatus, loadLogs, loadWebhook]);
+  }, [loadConfig, loadSyncStatus, loadLogs]);
 
-  const onSaveConfig = async (data: ConfigFormData) => {
-    setSaving(true);
-    try {
-      await odooService.updateConfig({
-        baseUrl: data.baseUrl || undefined,
-        database: data.database,
-        username: data.username,
-        password: data.password || undefined,
-        apiKey: data.apiKey || undefined,
-        timeoutMs: data.timeoutMs,
-        syncIntervalCron: data.syncIntervalCron,
-      });
-      toast.success("Configuration saved");
-      loadConfig();
-    } catch (e) {
-      toast.error("Failed to save configuration");
-    } finally {
-      setSaving(false);
-    }
-  };
+  useEffect(() => {
+    let disposed = false;
 
-  const onTestConnection = async () => {
-    setTesting(true);
-    setTestResult(null);
-    try {
-      const result = await odooService.testConnection();
-      setTestResult(result);
-      if (result.success) toast.success("Connection successful");
-      else toast.error(result.error || "Connection failed");
-    } catch {
-      setTestResult({ success: false, error: "Request failed" });
-      toast.error("Connection test failed");
-    } finally {
-      setTesting(false);
-    }
-  };
+    const poll = async () => {
+      if (disposed) return;
+      await Promise.allSettled([loadSyncStatus(), loadLogs()]);
+    };
+
+    // Refresh immediately, then continue polling.
+    void poll();
+
+    const intervalMs = syncState?.status === "RUNNING" ? 1500 : 7000;
+    const timer = window.setInterval(() => {
+      void poll();
+    }, intervalMs);
+
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+    };
+  }, [syncState?.status, loadSyncStatus, loadLogs]);
 
   const triggerSync = async (type: "products" | "stock" | "categories" | "full") => {
     setSyncing(true);
     try {
       await odooService.triggerSync(type);
       toast.success(`Sync (${type}) started`);
-      loadSyncStatus();
+      await Promise.all([loadSyncStatus(), loadLogs()]);
     } catch {
       toast.error("Failed to start sync");
     } finally {
@@ -178,39 +106,59 @@ function OdooIntegrationContent() {
     }
   };
 
+  const loadProductsPreview = async () => {
+    setPreviewLoading(true);
+    setPreviewError(null);
+    try {
+      const data = await odooService.getProductsPreview({ limit: 1, offset: 238 });
+      setPreviewProducts(data.items);
+      setPreviewFields(data.fields);
+      toast.success(`Loaded ${data.count} products preview`);
+    } catch (error: unknown) {
+      const message =
+        (typeof error === "object" &&
+        error !== null &&
+        "response" in error &&
+        typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message === "string")
+          ? (error as { response: { data: { message: string } } }).response.data.message
+          : "Failed to load products preview";
+      setPreviewError(message);
+      setPreviewProducts([]);
+      setPreviewFields([]);
+      toast.error("Failed to load products preview");
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
   const cancelSync = async () => {
     try {
       await odooService.cancelSync();
       toast.success("Sync cancelled");
-      loadSyncStatus();
+      await Promise.all([loadSyncStatus(), loadLogs()]);
     } catch {
       toast.error("Failed to cancel");
     }
   };
 
-  const copyWebhookUrl = () => {
-    if (webhook?.url) {
-      navigator.clipboard.writeText(webhook.url);
-      setCopied(true);
-      toast.success("Copied to clipboard");
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
-
   const statusBadgeVariant = (status: string) =>
     status === "SUCCESS" ? "success" : status === "RUNNING" ? "secondary" : status === "FAILED" ? "destructive" : "outline";
-
   return (
     <AdminRouteGuard>
       <div className="space-y-8">
-        <div>
+        <div className="flex items-start justify-between gap-4">
           <h1 className="text-2xl font-semibold tracking-tight">Odoo Integration</h1>
-          <p className="text-muted-foreground mt-1">
-            Configure connection, sync, and webhooks (Admin only)
-          </p>
+          <div className="flex flex-col items-end gap-1">
+            <Badge variant={config?.isConfigured ? "success" : "outline"}>
+              Configuration: {config?.isConfigured ? "Ready" : "Missing values"}
+            </Badge>
+          </div>
         </div>
+        <p className="text-muted-foreground -mt-6">
+          Odoo connection uses backend environment variables only.
+        </p>
 
-        {/* 1. Configure Odoo Connection */}
+        {/* 1. Connection source (env only) */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -218,97 +166,28 @@ function OdooIntegrationContent() {
         >
           <Card className="rounded-2xl border-border/60">
             <CardHeader>
-              <CardTitle>Connection settings</CardTitle>
+              <CardTitle>Connection source</CardTitle>
               <CardDescription>
-                Base URL, database, credentials. Password is masked and not shown after save.
+                Credentials are loaded from backend `.env` (`ODOO_URL`, `ODOO_DB`, `ODOO_USERNAME`, `ODOO_API` / `ODOO_PASSWORD`).
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-2 text-sm">
               {configLoading ? (
-                <div className="space-y-4">
-                  {[1, 2, 3, 4, 5].map((i) => (
-                    <div key={i} className="h-10 rounded-2xl bg-muted/60 animate-pulse" />
-                  ))}
-                </div>
+                <p className="text-muted-foreground">Loading configuration status…</p>
               ) : (
-                <form onSubmit={handleSubmit(onSaveConfig)} className="space-y-4">
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="baseUrl">Odoo Base URL</Label>
-                      <Input
-                        id="baseUrl"
-                        placeholder="https://odoo.example.com"
-                        {...register("baseUrl")}
-                      />
-                      {errors.baseUrl && (
-                        <p className="text-sm text-destructive">{errors.baseUrl.message}</p>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="database">Database name</Label>
-                      <Input id="database" placeholder="mycompany" {...register("database")} />
-                      {errors.database && (
-                        <p className="text-sm text-destructive">{errors.database.message}</p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="username">Username</Label>
-                      <Input id="username" placeholder="admin" {...register("username")} />
-                      {errors.username && (
-                        <p className="text-sm text-destructive">{errors.username.message}</p>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="password">Password</Label>
-                      <Input
-                        id="password"
-                        type="password"
-                        placeholder="Leave blank to keep current"
-                        autoComplete="new-password"
-                        {...register("password")}
-                      />
-                    </div>
-                  </div>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="apiKey">API Key (optional)</Label>
-                      <Input id="apiKey" type="password" placeholder="••••••••" {...register("apiKey")} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="timeoutMs">Timeout (ms)</Label>
-                      <Input
-                        id="timeoutMs"
-                        type="number"
-                        {...register("timeoutMs", { valueAsNumber: true })}
-                      />
-                      {errors.timeoutMs && (
-                        <p className="text-sm text-destructive">{errors.timeoutMs.message}</p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="syncIntervalCron">Sync interval (cron)</Label>
-                    <Input
-                      id="syncIntervalCron"
-                      placeholder="0 * * * * (hourly)"
-                      {...register("syncIntervalCron")}
-                    />
-                    {errors.syncIntervalCron && (
-                      <p className="text-sm text-destructive">{errors.syncIntervalCron.message}</p>
-                    )}
-                  </div>
-                  <Button type="submit" disabled={!isDirty || saving} className="rounded-2xl">
-                    {saving ? "Saving…" : "Save configuration"}
-                  </Button>
-                </form>
+                <>
+                  <p><span className="text-muted-foreground">Configured:</span> {config?.isConfigured ? "Yes" : "No"}</p>
+                  <p><span className="text-muted-foreground">Base URL:</span> {config?.baseUrl || "—"}</p>
+                  <p><span className="text-muted-foreground">Database:</span> {config?.database || "—"}</p>
+                  <p><span className="text-muted-foreground">Username:</span> {config?.username || "—"}</p>
+                  <p><span className="text-muted-foreground">Credential:</span> {config?.apiKey ? "Set in env" : "Missing"}</p>
+                </>
               )}
             </CardContent>
           </Card>
         </motion.div>
 
-        {/* 2. Test connection */}
+        {/* 2. Product preview */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -316,45 +195,40 @@ function OdooIntegrationContent() {
         >
           <Card className="rounded-2xl border-border/60">
             <CardHeader>
-              <CardTitle>Test connection</CardTitle>
-              <CardDescription>Verify API connectivity and get latency and Odoo version</CardDescription>
+              <CardTitle>Preview Odoo products</CardTitle>
+              <CardDescription>
+                Quick sample from Odoo (first 20 rows) before any import/save to local database.
+              </CardDescription>
             </CardHeader>
-            <CardContent className="flex flex-wrap items-center gap-4">
-              <Button
-                variant="outline"
-                className="rounded-2xl"
-                onClick={onTestConnection}
-                disabled={testing}
-              >
-                {testing ? (
+            <CardContent className="space-y-4">
+              <Button variant="outline" className="rounded-2xl" onClick={loadProductsPreview} disabled={previewLoading}>
+                {previewLoading ? (
                   <>
                     <Loader2 className="size-4 animate-spin" />
-                    Testing…
+                    Loading preview…
                   </>
                 ) : (
-                  <>
-                    <Play className="size-4" />
-                    Test connection
-                  </>
+                  "Load preview"
                 )}
               </Button>
-              {testResult && (
-                <div
-                  className={cn(
-                    "rounded-2xl border px-4 py-2 text-sm",
-                    testResult.success
-                      ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300"
-                      : "border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300"
-                  )}
-                >
-                  {testResult.success ? (
-                    <>
-                      Connected. Latency: {testResult.latencyMs ?? "—"} ms
-                      {testResult.odooVersion && ` · Odoo ${testResult.odooVersion}`}
-                    </>
-                  ) : (
-                    testResult.error ?? "Connection failed"
-                  )}
+
+              {previewError && (
+                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
+                  {previewError}
+                </div>
+              )}
+
+              {previewProducts.length > 0 && (
+                <div className="space-y-3">
+                  <div className="rounded-2xl border border-border/60 bg-muted/30 p-3 text-xs text-muted-foreground">
+                    Returning all readable fields from Odoo `product.product` (image binary fields excluded for payload size). Fields returned:{" "}
+                    <span className="font-semibold text-foreground">{previewFields.length}</span>
+                  </div>
+                  <div className="max-h-96 overflow-auto rounded-2xl border border-border/60 bg-muted/20 p-3">
+                    <pre className="text-xs">
+                      {JSON.stringify(previewProducts, null, 2)}
+                    </pre>
+                  </div>
                 </div>
               )}
             </CardContent>
@@ -466,44 +340,11 @@ function OdooIntegrationContent() {
           </Card>
         </motion.div>
 
-        {/* 4. Webhook config */}
+        {/* 4. Logs panel */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.15 }}
-        >
-          <Card className="rounded-2xl border-border/60">
-            <CardHeader>
-              <CardTitle>Webhook</CardTitle>
-              <CardDescription>URL for Odoo to send events (read-only)</CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-wrap items-center gap-4">
-              <div className="flex-1 min-w-0 rounded-2xl border border-border bg-muted/30 px-4 py-2 font-mono text-sm truncate">
-                {webhook?.url ?? "—"}
-              </div>
-              <Button
-                variant="outline"
-                size="icon"
-                className="rounded-2xl shrink-0"
-                onClick={copyWebhookUrl}
-                disabled={!webhook?.url}
-              >
-                {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
-              </Button>
-              {webhook && (
-                <Badge variant={webhook.active ? "success" : "secondary"}>
-                  {webhook.active ? "Active" : "Inactive"}
-                </Badge>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* 5. Logs panel */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.2 }}
         >
           <Card className="rounded-2xl border-border/60">
             <CardHeader>

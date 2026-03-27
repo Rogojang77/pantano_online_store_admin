@@ -23,6 +23,7 @@ import {
   type NewsletterSubscriberStatus,
 } from "@/services/newsletter.service";
 import { toast } from "sonner";
+import { ListFetchError } from "@/components/list-fetch-error";
 
 const STATUS_OPTIONS: NewsletterSubscriberStatus[] = ["PENDING", "SUBSCRIBED", "UNSUBSCRIBED"];
 const statusVariant: Record<string, "default" | "secondary" | "success" | "warning" | "outline"> = {
@@ -34,6 +35,7 @@ const statusVariant: Record<string, "default" | "secondary" | "success" | "warni
 export default function NewsletterPage() {
   const [data, setData] = useState<{ data: NewsletterSubscriberListItem[]; total: number } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [page, setPage] = useState(1);
   const [limit] = useState(20);
@@ -56,9 +58,13 @@ export default function NewsletterPage() {
     if (searchDebounced.trim()) params.search = searchDebounced.trim();
     newsletterService
       .getSubscribers(params)
-      .then(setData)
+      .then((response) => {
+        setData(response);
+        setLoadError(false);
+      })
       .catch(() => {
-        setData({ data: [], total: 0 });
+        setData(null);
+        setLoadError(true);
         toast.error("Failed to load newsletter subscribers");
       })
       .finally(() => setLoading(false));
@@ -227,6 +233,8 @@ export default function NewsletterPage() {
                   <Skeleton key={i} className="h-12 w-full rounded-xl" />
                 ))}
               </div>
+            ) : loadError ? (
+              <ListFetchError message="Could not load newsletter subscribers." onRetry={fetchSubscribers} />
             ) : (
               <>
                 <div className="overflow-x-auto rounded-2xl border border-border/60">

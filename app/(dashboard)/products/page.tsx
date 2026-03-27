@@ -1,42 +1,99 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   useReactTable,
   getCoreRowModel,
   getPaginationRowModel,
-  getSortedRowModel,
   type ColumnDef,
-  type SortingState,
   flexRender,
 } from "@tanstack/react-table";
 import { motion } from "framer-motion";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Archive, Trash2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { productsService, type ProductListItem } from "@/services/products.service";
-import type { PaginatedResponse } from "@/types/api";
-import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
+import { TablePagination } from "@/components/ui/table-pagination";
+import type { ProductListItem } from "@/services/products.service";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import {
+  useProductList,
+  useCategoriesQuery,
+  useBrandsQuery,
+  useDeleteProduct,
+  useArchiveProduct,
+} from "./_hooks/use-product-queries";
 
 export default function ProductsPage() {
   const router = useRouter();
-  const [data, setData] = useState<PaginatedResponse<ProductListItem> | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [sorting, setSorting] = useState<SortingState>([]);
+
   const [page, setPage] = useState(0);
+  const [searchInput, setSearchInput] = useState("");
+  const [searchDebounced, setSearchDebounced] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [brandFilter, setBrandFilter] = useState("");
+  const [sortBy, setSortBy] = useState<"createdAt" | "name" | "sku" | "updatedAt">("createdAt");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const limit = 10;
 
   useEffect(() => {
-    setLoading(true);
-    productsService
-      .getList({ page: page + 1, limit })
-      .then(setData)
-      .catch(() => setData({ data: [], meta: { total: 0, page: 1, limit, totalPages: 0, hasNext: false, hasPrev: false } }))
-      .finally(() => setLoading(false));
-  }, [page]);
+    const timer = window.setTimeout(() => setSearchDebounced(searchInput.trim()), 300);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [searchDebounced, statusFilter, categoryFilter, brandFilter, sortBy, sortDir]);
+
+  const { data, isLoading: loading } = useProductList({
+    page: page + 1,
+    limit,
+    search: searchDebounced || undefined,
+    status: statusFilter || undefined,
+    categoryId: categoryFilter || undefined,
+    brandId: brandFilter || undefined,
+    sortBy,
+    sortDir,
+  });
+
+  const { data: categories = [] } = useCategoriesQuery();
+  const { data: brands = [] } = useBrandsQuery();
+
+  const archiveMutation = useArchiveProduct();
+  const deleteMutation = useDeleteProduct();
+
+  const handleArchive = useCallback(async (id: string, name: string) => {
+    if (!window.confirm(`Archive "${name}"? It will be hidden from active listings.`)) return;
+    setActionLoadingId(id);
+    try {
+      await archiveMutation.mutateAsync(id);
+      toast.success(`"${name}" archived`);
+    } catch {
+      toast.error("Failed to archive product");
+    } finally {
+      setActionLoadingId(null);
+    }
+  }, [archiveMutation]);
+
+  const handleDelete = useCallback(async (id: string, name: string) => {
+    if (!window.confirm(`Delete "${name}"? This action cannot be undone.`)) return;
+    setActionLoadingId(id);
+    try {
+      await deleteMutation.mutateAsync(id);
+      toast.success(`"${name}" deleted`);
+    } catch {
+      toast.error("Failed to delete product");
+    } finally {
+      setActionLoadingId(null);
+    }
+  }, [deleteMutation]);
 
   const columns: ColumnDef<ProductListItem>[] = [
     {
@@ -59,11 +116,11 @@ export default function ProductsPage() {
     {
       accessorKey: "status",
       header: "Status",
-      cell: ({ getValue }) => (
-        <Badge variant={getValue() === "ACTIVE" ? "success" : "secondary"}>
-          {getValue() as string}
-        </Badge>
-      ),
+      cell: ({ getValue }) => {
+        const status = getValue() as string;
+        const variant = status === "ACTIVE" ? "success" : status === "ARCHIVED" ? "destructive" : "secondary";
+        return <Badge variant={variant}>{status}</Badge>;
+      },
     },
     {
       accessorKey: "createdAt",
@@ -78,29 +135,52 @@ export default function ProductsPage() {
       id: "actions",
       header: "",
       enableSorting: false,
-      cell: ({ row }) => (
-        <div className="flex justify-end">
-          <Button
-            size="sm"
-            variant="outline"
-            className="rounded-xl"
-            onClick={() => router.push(`/products/${row.original.id}`)}
-          >
-            Edit
-          </Button>
-        </div>
-      ),
+      cell: ({ row }) => {
+        const product = row.original;
+        const isLoading = actionLoadingId === product.id;
+        return (
+          <div className="flex justify-end gap-1">
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded-xl"
+              onClick={() => router.push(`/products/${product.id}`)}
+            >
+              Edit
+            </Button>
+            {product.status !== "ARCHIVED" && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="rounded-xl"
+                onClick={() => handleArchive(product.id, product.name)}
+                disabled={isLoading}
+                title="Archive"
+              >
+                <Archive className="size-3.5" />
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded-xl text-red-500 hover:text-red-600"
+              onClick={() => handleDelete(product.id, product.name)}
+              disabled={isLoading}
+              title="Delete"
+            >
+              <Trash2 className="size-3.5" />
+            </Button>
+          </div>
+        );
+      },
     },
   ];
 
   const table = useReactTable({
     data: data?.data ?? [],
     columns,
-    state: { sorting },
-    onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
     manualPagination: true,
     pageCount: data?.meta.totalPages ?? 0,
   });
@@ -123,7 +203,7 @@ export default function ProductsPage() {
         <CardHeader className="flex flex-row items-center justify-between gap-4">
           <div>
             <CardTitle>All products</CardTitle>
-            <CardDescription>Paginated list with sorting</CardDescription>
+            <CardDescription>Paginated list with filters and sorting</CardDescription>
           </div>
           <Button
             size="sm"
@@ -142,6 +222,71 @@ export default function ProductsPage() {
             </div>
           ) : (
             <>
+              <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-6">
+                <div className="relative md:col-span-2">
+                  <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    placeholder="Search by name or SKU..."
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                    className="rounded-2xl pl-9"
+                  />
+                </div>
+                <Select
+                  className="rounded-2xl"
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                >
+                  <option value="">All statuses</option>
+                  <option value="ACTIVE">ACTIVE</option>
+                  <option value="DRAFT">DRAFT</option>
+                  <option value="ARCHIVED">ARCHIVED</option>
+                </Select>
+                <SearchableSelect
+                  className="rounded-2xl"
+                  value={categoryFilter}
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                  options={categories.map((c) => ({
+                    value: c.id,
+                    label: c.name,
+                    keywords: [c.normalizedName ?? "", c.slug ?? ""],
+                  }))}
+                  placeholder="All categories"
+                  searchPlaceholder="Search categories..."
+                />
+                <SearchableSelect
+                  className="rounded-2xl"
+                  value={brandFilter}
+                  onChange={(e) => setBrandFilter(e.target.value)}
+                  options={brands.map((b) => ({
+                    value: b.id,
+                    label: b.name,
+                    keywords: [b.slug],
+                  }))}
+                  placeholder="All brands"
+                  searchPlaceholder="Search brands..."
+                />
+                <div className="flex gap-2">
+                  <Select
+                    className="rounded-2xl"
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as "createdAt" | "name" | "sku" | "updatedAt")}
+                  >
+                    <option value="createdAt">Sort by created</option>
+                    <option value="updatedAt">Sort by updated</option>
+                    <option value="name">Sort by name</option>
+                    <option value="sku">Sort by SKU</option>
+                  </Select>
+                  <Select
+                    className="rounded-2xl"
+                    value={sortDir}
+                    onChange={(e) => setSortDir(e.target.value as "asc" | "desc")}
+                  >
+                    <option value="desc">Desc</option>
+                    <option value="asc">Asc</option>
+                  </Select>
+                </div>
+              </div>
               <div className="overflow-x-auto rounded-2xl border border-border/60">
                 <table className="w-full text-left text-sm">
                   <thead>
@@ -190,30 +335,13 @@ export default function ProductsPage() {
               </div>
               <div className="flex items-center justify-between px-2 py-4">
                 <p className="text-sm text-muted-foreground">
-                  Page {page + 1} of {data?.meta.totalPages || 1} · {data?.meta.total ?? 0} total
+                  Page {page + 1} of {data?.meta.totalPages || 1} &middot; {data?.meta.total ?? 0} total
                 </p>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="rounded-xl"
-                    onClick={() => setPage((p) => Math.max(0, p - 1))}
-                    disabled={!data?.meta.hasPrev}
-                  >
-                    <ChevronLeft className="size-4" />
-                    Previous
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="rounded-xl"
-                    onClick={() => setPage((p) => p + 1)}
-                    disabled={!data?.meta.hasNext}
-                  >
-                    Next
-                    <ChevronRight className="size-4" />
-                  </Button>
-                </div>
+                <TablePagination
+                  page={page}
+                  totalPages={data?.meta.totalPages ?? 0}
+                  onPageChange={setPage}
+                />
               </div>
             </>
           )}

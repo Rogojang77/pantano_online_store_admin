@@ -33,6 +33,7 @@ import {
 } from "@/services/faq.service";
 import type { PaginatedResponse } from "@/types/api";
 import { toast } from "sonner";
+import { ListFetchError } from "@/components/list-fetch-error";
 
 const STATUS_OPTIONS: FaqSubmissionStatus[] = ["NEW", "IN_PROGRESS", "ANSWERED"];
 const statusVariant: Record<string, "default" | "secondary" | "success" | "warning" | "outline"> = {
@@ -49,6 +50,7 @@ function truncate(s: string, len: number) {
 export default function FaqPage() {
   const [data, setData] = useState<PaginatedResponse<FaqSubmissionListItem> | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [page, setPage] = useState(0);
   const [limit] = useState(10);
   const [statusFilter, setStatusFilter] = useState<string>("");
@@ -67,19 +69,13 @@ export default function FaqPage() {
     };
     faqService
       .getSubmissions(params)
-      .then(setData)
+      .then((response) => {
+        setData(response);
+        setLoadError(false);
+      })
       .catch(() => {
-        setData({
-          data: [],
-          meta: {
-            total: 0,
-            page: 1,
-            limit,
-            totalPages: 0,
-            hasNext: false,
-            hasPrev: false,
-          },
-        });
+        setData(null);
+        setLoadError(true);
         toast.error("Failed to load FAQ submissions");
       })
       .finally(() => setLoading(false));
@@ -237,6 +233,8 @@ export default function FaqPage() {
                   <Skeleton key={i} className="h-12 w-full rounded-xl" />
                 ))}
               </div>
+            ) : loadError ? (
+              <ListFetchError message="Could not load FAQ submissions." onRetry={fetchFaq} />
             ) : (
               <>
                 <div className="overflow-x-auto rounded-2xl border border-border/60">
@@ -361,6 +359,13 @@ export default function FaqPage() {
                   />
                 </div>
                 <DialogFooter className="pt-2">
+                  <Button
+                    variant="outline"
+                    className="rounded-xl"
+                    onClick={() => setDetailsOpen(false)}
+                  >
+                    Close
+                  </Button>
                   <Button
                     className="rounded-xl"
                     disabled={saving}

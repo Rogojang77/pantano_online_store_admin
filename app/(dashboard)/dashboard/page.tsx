@@ -6,7 +6,7 @@ import {
   Package,
   ShoppingCart,
   CalendarClock,
-  AlertTriangle,
+  Clock3,
   Activity,
   CheckCircle2,
   XCircle,
@@ -16,6 +16,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { adminService, type DashboardStats } from "@/services/admin.service";
+import { odooService } from "@/services/odoo.service";
+import { ordersService } from "@/services/orders.service";
+import { reservationsService } from "@/services/reservations.service";
+import type { SyncState } from "@/types/odoo";
 import { cn } from "@/lib/utils";
 
 const container = {
@@ -31,26 +35,139 @@ const item = {
   show: { opacity: 1, y: 0 },
 };
 
+type StatCard = {
+  title: string;
+  value: number;
+  icon: typeof Package;
+  delay: number;
+  variant?: "default" | "warning";
+};
+
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [ordersToday, setOrdersToday] = useState(0);
+  const [reservationsToday, setReservationsToday] = useState(0);
+  const [syncState, setSyncState] = useState<SyncState | null>(null);
+  const [activityFeed, setActivityFeed] = useState<
+    { id: string; text: string; time: string; createdAt: string }[]
+  >([]);
   const [loading, setLoading] = useState(true);
-  const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "success" | "error">("idle");
 
   useEffect(() => {
-    adminService
-      .getDashboardStats()
-      .then(setStats)
-      .catch(() => setStats({
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+
+    Promise.all([
+      adminService.getDashboardStats().catch(() => ({
         products: 0,
         orders: 0,
         ordersPending: 0,
         users: 0,
         categories: 0,
-      }))
+      })),
+      odooService.getSyncStatus().catch(() => ({ status: "IDLE" as const })),
+      odooService.getLogs({ limit: 8 }).catch(() => ({ logs: [] })),
+      ordersService.getList({ page: 1, limit: 5 }).catch(() => ({
+        data: [],
+        meta: { total: 0, page: 1, limit: 5, totalPages: 1, hasNext: false, hasPrev: false },
+      })),
+      ordersService
+        .getList({
+          page: 1,
+          limit: 1,
+          from: startOfDay.toISOString(),
+          to: endOfDay.toISOString(),
+        })
+        .catch(() => ({
+          data: [],
+          meta: { total: 0, page: 1, limit: 1, totalPages: 1, hasNext: false, hasPrev: false },
+        })),
+      reservationsService.getList({ page: 1, limit: 5 }).catch(() => ({
+        data: [],
+        meta: { total: 0, page: 1, limit: 5, totalPages: 1, hasNext: false, hasPrev: false },
+      })),
+      reservationsService
+        .getList({
+          page: 1,
+          limit: 1,
+          from: startOfDay.toISOString(),
+          to: endOfDay.toISOString(),
+        })
+        .catch(() => ({
+          data: [],
+          meta: { total: 0, page: 1, limit: 1, totalPages: 1, hasNext: false, hasPrev: false },
+        })),
+    ])
+      .then(
+        ([
+          statsData,
+          syncData,
+          logsData,
+          recentOrders,
+          ordersTodayData,
+          recentReservations,
+          reservationsTodayData,
+        ]) => {
+          setStats(statsData);
+          setSyncState(syncData);
+          setOrdersToday(ordersTodayData.meta.total);
+          setReservationsToday(reservationsTodayData.meta.total);
+
+          const orderEvents = recentOrders.data.map((order) => ({
+            id: `order-${order.id}`,
+            text: `Order #${order.orderNumber} · ${order.status.replace(/_/g, " ")}`,
+            time: order.createdAt,
+            createdAt: order.createdAt,
+          }));
+
+          const reservationEvents = recentReservations.data.map((reservation) => ({
+            id: `reservation-${reservation.id}`,
+            text: `Reservation #${reservation.order?.orderNumber ?? reservation.orderId}`,
+            time: reservation.createdAt,
+            createdAt: reservation.createdAt,
+          }));
+
+          const syncEvents = logsData.logs.map((log) => ({
+            id: `sync-${log.id}`,
+            text: `Odoo: ${log.message}`,
+            time: log.createdAt,
+            createdAt: log.createdAt,
+          }));
+
+          const merged = [...orderEvents, ...reservationEvents, ...syncEvents]
+            .sort(
+              (a, b) =>
+                new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+            )
+            .slice(0, 8);
+
+          setActivityFeed(merged);
+        },
+      )
       .finally(() => setLoading(false));
   }, []);
 
-  const statCards = [
+  const formatRelativeTime = (iso: string) => {
+    const diffMs = Date.now() - new Date(iso).getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 1) return "just now";
+    if (diffMin < 60) return `${diffMin} min ago`;
+    const diffHr = Math.floor(diffMin / 60);
+    if (diffHr < 24) return `${diffHr} hour${diffHr === 1 ? "" : "s"} ago`;
+    const diffDay = Math.floor(diffHr / 24);
+    return `${diffDay} day${diffDay === 1 ? "" : "s"} ago`;
+  };
+
+  const syncStatus = syncState?.status === "RUNNING"
+    ? "syncing"
+    : syncState?.status === "SUCCESS"
+      ? "success"
+      : syncState?.status === "FAILED"
+        ? "error"
+        : "idle";
+
+  const statCards: StatCard[] = [
     {
       title: "Total products",
       value: stats?.products ?? 0,
@@ -59,30 +176,23 @@ export default function DashboardPage() {
     },
     {
       title: "Orders today",
-      value: stats?.orders ?? 0,
+      value: ordersToday,
       icon: ShoppingCart,
       delay: 1,
     },
     {
       title: "Reservations today",
-      value: stats?.ordersPending ?? 0,
+      value: reservationsToday,
       icon: CalendarClock,
       delay: 2,
     },
     {
-      title: "Low stock alerts",
-      value: 0,
-      icon: AlertTriangle,
-      variant: "warning" as const,
+      title: "Pending orders",
+      value: stats?.ordersPending ?? 0,
+      icon: Clock3,
       delay: 3,
+      variant: "warning",
     },
-  ];
-
-  const activityFeed = [
-    { id: "1", text: "Order #1001 confirmed", time: "2 min ago", type: "order" },
-    { id: "2", text: "Product \"Cement 25kg\" updated", time: "15 min ago", type: "product" },
-    { id: "3", text: "Inventory sync completed", time: "1 hour ago", type: "sync" },
-    { id: "4", text: "New reservation #R-204", time: "2 hours ago", type: "reservation" },
   ];
 
   return (
@@ -118,7 +228,7 @@ export default function DashboardPage() {
                 <p className="text-sm text-muted-foreground">
                   {syncStatus === "idle" && "Last sync: —"}
                   {syncStatus === "syncing" && "Sync in progress…"}
-                  {syncStatus === "success" && "Last sync: Just now"}
+                  {syncStatus === "success" && `Last sync: ${syncState?.lastSyncAt ? formatRelativeTime(syncState.lastSyncAt) : "—"}`}
                   {syncStatus === "error" && "Last sync failed"}
                 </p>
               </div>
@@ -182,15 +292,27 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <ul className="space-y-4">
-              {activityFeed.map((a) => (
-                <li
-                  key={a.id}
-                  className="flex items-center justify-between border-b border-border/40 pb-4 last:border-0 last:pb-0"
-                >
-                  <span className="text-sm">{a.text}</span>
-                  <span className="text-xs text-muted-foreground">{a.time}</span>
-                </li>
-              ))}
+              {loading ? (
+                <>
+                  <Skeleton className="h-5 w-full rounded-xl" />
+                  <Skeleton className="h-5 w-full rounded-xl" />
+                  <Skeleton className="h-5 w-full rounded-xl" />
+                </>
+              ) : activityFeed.length === 0 ? (
+                <li className="text-sm text-muted-foreground">No recent activity.</li>
+              ) : (
+                activityFeed.map((a) => (
+                  <li
+                    key={a.id}
+                    className="flex items-center justify-between border-b border-border/40 pb-4 last:border-0 last:pb-0"
+                  >
+                    <span className="text-sm">{a.text}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {formatRelativeTime(a.time)}
+                    </span>
+                  </li>
+                ))
+              )}
             </ul>
           </CardContent>
         </Card>

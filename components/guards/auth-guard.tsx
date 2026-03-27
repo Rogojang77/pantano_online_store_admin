@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuthStore } from "@/store/auth-store";
+import { authService } from "@/services/auth.service";
 
 const PUBLIC_PATHS = ["/login"];
 
@@ -10,34 +11,40 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const isPublic = PUBLIC_PATHS.some((p) => pathname?.startsWith(p));
-
-  // Subscribe to the exact fields that determine auth so the component re-renders when they change
-  const accessToken = useAuthStore((s) => s.accessToken);
-  const expiresAt = useAuthStore((s) => s.expiresAt);
-  const isAuthenticated =
-    !!accessToken && !!expiresAt && typeof expiresAt === "number" && Date.now() < expiresAt;
-
-  // Wait for zustand persist to rehydrate before deciding to redirect (avoids flash to login when token is in localStorage)
-  const [hasHydrated, setHasHydrated] = useState(false);
-  useEffect(() => {
-    const store = useAuthStore as unknown as { persist?: { hasHydrated: () => boolean; onFinishHydration: (fn: () => void) => () => void } };
-    const persist = store.persist;
-    if (persist?.hasHydrated?.()) {
-      setHasHydrated(true);
-      return;
-    }
-    const unsub = persist?.onFinishHydration?.(() => setHasHydrated(true));
-    return () => unsub?.();
-  }, []);
+  const user = useAuthStore((s) => s.user);
+  const setProfile = useAuthStore((s) => s.setProfile);
+  const clearAuth = useAuthStore((s) => s.clearAuth);
+  const [checkingSession, setCheckingSession] = useState(true);
 
   useEffect(() => {
-    if (!hasHydrated || isPublic) return;
-    if (!isAuthenticated) {
+    if (isPublic) return;
+    let cancelled = false;
+    authService
+      .getProfile()
+      .then((profile) => {
+        if (!cancelled) setProfile(profile);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          clearAuth();
+          router.replace("/login");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setCheckingSession(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isPublic, pathname, router, setProfile, clearAuth]);
+
+  useEffect(() => {
+    if (isPublic || checkingSession) return;
+    if (!user) {
       router.replace("/login");
     }
-  }, [hasHydrated, isAuthenticated, isPublic, router, pathname]);
+  }, [isPublic, checkingSession, user, router]);
 
-  if (!hasHydrated && !isPublic) return null;
-  if (!isPublic && !isAuthenticated) return null;
+  if (!isPublic && (checkingSession || !user)) return null;
   return <>{children}</>;
 }

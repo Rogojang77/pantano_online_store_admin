@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogDescription,
@@ -179,6 +180,11 @@ export function MediaPicker({ value, onChange, placeholder = "Image URL", classN
               </>
             )}
           </div>
+          <DialogFooter className="mt-2">
+            <Button type="button" variant="outline" className="rounded-xl" onClick={() => setOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -17,30 +17,25 @@ import {
 } from "@/services/roles.service";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { ListFetchError } from "@/components/list-fetch-error";
 
 function RolesContent() {
   const [roles, setRoles] = useState<RoleItem[]>([]);
   const [permissions, setPermissions] = useState<PermissionItem[]>([]);
   const [selectedRole, setSelectedRole] = useState<RoleWithPermissions | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [roleLoading, setRoleLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [selectedPermIds, setSelectedPermIds] = useState<Set<string>>(new Set());
 
-  const loadRoles = useCallback(() => {
-    rolesService.getRoles().then(setRoles).catch(() => setRoles([]));
-  }, []);
-
-  const loadPermissions = useCallback(() => {
-    rolesService.getPermissions().then(setPermissions).catch(() => setPermissions([]));
-  }, []);
-
-  useEffect(() => {
+  const fetchRoleData = useCallback(() => {
     setLoading(true);
     Promise.all([rolesService.getRoles(), rolesService.getPermissions()])
       .then(([r, p]) => {
         setRoles(r);
         setPermissions(p);
+        setLoadError(false);
         if (r.length > 0) {
           return rolesService.getRoleById(r[0].id).then((role) => {
             setSelectedRole(role);
@@ -49,12 +44,23 @@ function RolesContent() {
             );
           });
         }
+        setSelectedRole(null);
+        setSelectedPermIds(new Set());
       })
       .catch(() => {
+        setRoles([]);
+        setPermissions([]);
+        setSelectedRole(null);
+        setSelectedPermIds(new Set());
+        setLoadError(true);
         toast.error("Failed to load roles/permissions");
       })
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    fetchRoleData();
+  }, [fetchRoleData]);
 
   const onSelectRole = useCallback((roleId: string) => {
     if (!roleId) {
@@ -148,6 +154,8 @@ function RolesContent() {
                 <Skeleton key={i} className="h-12 w-full rounded-xl" />
               ))}
             </div>
+          ) : loadError ? (
+            <ListFetchError message="Could not load roles and permissions." onRetry={fetchRoleData} />
           ) : roleLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="size-8 animate-spin text-muted-foreground" />

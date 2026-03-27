@@ -15,6 +15,17 @@ export interface OdooConnectionTestResult {
   latencyMs?: number;
   odooVersion?: string;
   error?: string;
+  response?: Record<string, unknown>;
+}
+
+export type OdooPreviewProduct = Record<string, unknown>;
+
+export interface OdooPreviewProductsResponse {
+  items: OdooPreviewProduct[];
+  fields: string[];
+  limit: number;
+  offset: number;
+  count: number;
 }
 
 export type SyncStatus = "IDLE" | "RUNNING" | "FAILED" | "SUCCESS";
