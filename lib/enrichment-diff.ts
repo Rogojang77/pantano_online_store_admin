@@ -1,5 +1,6 @@
 export type FixedDiffPath =
   | "name"
+  | "slug"
   | "description"
   | "metaTitle"
   | "metaDescription"
@@ -26,6 +27,7 @@ export interface EnrichmentImageItem {
 
 export interface EnrichmentCandidateValues {
   name?: unknown;
+  slug?: unknown;
   description?: unknown;
   metaTitle?: unknown;
   metaDescription?: unknown;
@@ -39,6 +41,7 @@ export interface EnrichmentCandidateValues {
 
 export interface CurrentValues {
   name?: unknown;
+  slug?: unknown;
   description?: unknown;
   metaTitle?: unknown;
   metaDescription?: unknown;
@@ -51,6 +54,7 @@ export interface CurrentValues {
 
 const FIELD_META: { path: FixedDiffPath; label: string }[] = [
   { path: "name", label: "Name" },
+  { path: "slug", label: "Slug" },
   { path: "description", label: "Description" },
   { path: "metaTitle", label: "Meta title" },
   { path: "metaDescription", label: "Meta description" },

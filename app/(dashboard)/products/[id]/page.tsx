@@ -243,6 +243,7 @@ export default function ProductEditPage() {
         const previewState = buildGeminiPreviewState({
           current: {
             name: current.name,
+            slug: current.slug,
             description: current.description,
             metaTitle: current.metaTitle,
             metaDescription: current.metaDescription,
@@ -329,8 +330,15 @@ export default function ProductEditPage() {
         }
       }
 
-      const textMapping: Array<"name" | "description" | "metaTitle" | "metaDescription" | "metaKeywords"> = [
-        "name", "description", "metaTitle", "metaDescription", "metaKeywords",
+      const textMapping: Array<
+        "name" | "slug" | "description" | "metaTitle" | "metaDescription" | "metaKeywords"
+      > = [
+        "name",
+        "slug",
+        "description",
+        "metaTitle",
+        "metaDescription",
+        "metaKeywords",
       ];
       for (const path of textMapping) {
         if (!mappedPreview) continue;

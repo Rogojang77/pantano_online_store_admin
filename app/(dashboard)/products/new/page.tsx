@@ -167,6 +167,7 @@ export default function ProductCreatePage() {
         ean: values.ean,
         sku: values.sku,
         name: values.name,
+        slug: values.slug?.trim() || null,
         description: values.description ?? null,
         brand: getBrandNameById(values.brandId),
         technicalSpecs: parsedTechnicalSpecs ?? pendingIcecatTechnicalSpecs ?? {},
@@ -177,6 +178,7 @@ export default function ProductCreatePage() {
         const previewState = buildGeminiPreviewState({
           current: {
             name: values.name,
+            slug: values.slug,
             description: values.description,
             metaTitle: values.metaTitle,
             metaDescription: values.metaDescription,
@@ -240,8 +242,15 @@ export default function ProductCreatePage() {
         setTechnicalSpecsDraft(JSON.stringify(mappedShopperSpecs, null, 2));
         setTechnicalSpecsError(null);
       }
-      const textMapping: Array<"name" | "description" | "metaTitle" | "metaDescription" | "metaKeywords"> = [
-        "name", "description", "metaTitle", "metaDescription", "metaKeywords",
+      const textMapping: Array<
+        "name" | "slug" | "description" | "metaTitle" | "metaDescription" | "metaKeywords"
+      > = [
+        "name",
+        "slug",
+        "description",
+        "metaTitle",
+        "metaDescription",
+        "metaKeywords",
       ];
       for (const path of textMapping) {
         if (!mappedPreview) continue;

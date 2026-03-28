@@ -16,6 +16,7 @@ import {
   X,
   ContactRound,
   Plug,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCanAccessAdminSection } from "@/hooks/use-role-guard";
@@ -41,6 +42,7 @@ const adminNav = [
   { href: "/contact", label: "Contact", icon: ContactRound },
   { href: "/admin/settings", label: "System Settings", icon: Settings },
   { href: "/admin/integrations/odoo", label: "Odoo Integration", icon: Plug },
+  { href: "/admin/integrations/gemini", label: "Gemini Enrichment", icon: Sparkles },
   // { href: "/admin/logs", label: "Logs", icon: FileText },
 ];
 
