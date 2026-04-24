@@ -1,5 +1,6 @@
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { resolveBackendMediaUrl } from "@/lib/resolve-backend-media-url";
 import type { ProductImageItem } from "@/services/products.service";
 
 interface ProductImageManagerProps {
@@ -35,7 +36,7 @@ export function ProductImageManager({
             <div key={img.id} className="rounded-lg border border-border/60 bg-muted/10 p-2">
               <div className="relative mb-2 size-24 overflow-hidden rounded-lg border border-border/60 bg-muted/20">
                 <img
-                  src={img.url}
+                  src={resolveBackendMediaUrl(img.url)}
                   alt={img.alt || "Product image"}
                   className="size-full object-cover"
                   loading="lazy"

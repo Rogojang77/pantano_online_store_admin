@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { resolveBackendMediaUrl } from "@/lib/resolve-backend-media-url";
 import {
   Dialog,
   DialogContent,
@@ -272,7 +273,7 @@ export default function MediaPage() {
                     <div className="aspect-square relative bg-muted/40">
                       {isImage(item.mimeType) ? (
                         <img
-                          src={item.url}
+                          src={resolveBackendMediaUrl(item.url)}
                           alt={item.alt ?? item.originalName}
                           className="w-full h-full object-cover"
                         />

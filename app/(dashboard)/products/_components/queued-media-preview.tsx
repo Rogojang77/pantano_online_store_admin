@@ -1,4 +1,5 @@
 import type { EnrichmentImageItem, ProposedDocumentItem } from "@/lib/enrichment-diff";
+import { resolveBackendMediaUrl } from "@/lib/resolve-backend-media-url";
 
 interface QueuedMediaPreviewProps {
   pendingImages: EnrichmentImageItem[];
@@ -23,7 +24,7 @@ export function QueuedMediaPreview({ pendingImages, pendingDocuments }: QueuedMe
               className="relative size-20 overflow-hidden rounded-lg border border-border/60 bg-muted/20"
             >
               <img
-                src={img.url}
+                src={resolveBackendMediaUrl(img.url)}
                 alt={img.alt || `Image ${idx + 1}`}
                 className="size-full object-cover"
                 loading="lazy"

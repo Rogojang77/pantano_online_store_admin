@@ -13,6 +13,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { mediaService, type MediaItem } from "@/services/media.service";
+import { resolveBackendMediaUrl } from "@/lib/resolve-backend-media-url";
 import { cn } from "@/lib/utils";
 
 export interface MediaPickerProps {
@@ -140,7 +141,7 @@ export function MediaPicker({ value, onChange, placeholder = "Image URL", classN
                     >
                       {isImage(item.mimeType) ? (
                         <img
-                          src={item.url}
+                          src={resolveBackendMediaUrl(item.url)}
                           alt={item.alt ?? item.originalName}
                           className="w-full h-full object-cover"
                         />
