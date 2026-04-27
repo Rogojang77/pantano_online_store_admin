@@ -146,6 +146,20 @@ export function useArchiveProduct() {
   });
 }
 
+export function useBulkArchiveProducts() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: {
+      categoryIds?: string[];
+      brandIds?: string[];
+      includeCategoryDescendants?: boolean;
+    }) => productsService.bulkArchive(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: productKeys.lists() });
+    },
+  });
+}
+
 export function useInvalidateProduct(id: string) {
   const queryClient = useQueryClient();
   return () => {

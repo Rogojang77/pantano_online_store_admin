@@ -21,6 +21,7 @@ import { ordersService } from "@/services/orders.service";
 import { reservationsService } from "@/services/reservations.service";
 import type { SyncState } from "@/types/odoo";
 import { cn } from "@/lib/utils";
+import { OrderRevenueCard } from "./_components/order-revenue-card";
 
 const container = {
   hidden: { opacity: 0 },
@@ -279,6 +280,10 @@ export default function DashboardPage() {
             </Card>
           </motion.div>
         ))}
+      </motion.div>
+
+      <motion.div variants={item}>
+        <OrderRevenueCard />
       </motion.div>
 
       {/* Recent activity */}

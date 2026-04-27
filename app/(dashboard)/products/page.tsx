@@ -17,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { SearchableMultiSelect } from "@/components/ui/searchable-multi-select";
 import { TablePagination } from "@/components/ui/table-pagination";
 import type { ProductListItem } from "@/services/products.service";
 import { useRouter } from "next/navigation";
@@ -27,6 +28,7 @@ import {
   useBrandsQuery,
   useDeleteProduct,
   useArchiveProduct,
+  useBulkArchiveProducts,
 } from "./_hooks/use-product-queries";
 
 export default function ProductsPage() {
@@ -41,6 +43,9 @@ export default function ProductsPage() {
   const [sortBy, setSortBy] = useState<"createdAt" | "name" | "ean" | "updatedAt">("createdAt");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [bulkCategoryIds, setBulkCategoryIds] = useState<string[]>([]);
+  const [bulkBrandIds, setBulkBrandIds] = useState<string[]>([]);
+  const [bulkIncludeSubcategories, setBulkIncludeSubcategories] = useState(false);
   const limit = 10;
 
   useEffect(() => {
@@ -68,6 +73,7 @@ export default function ProductsPage() {
 
   const archiveMutation = useArchiveProduct();
   const deleteMutation = useDeleteProduct();
+  const bulkArchiveMutation = useBulkArchiveProducts();
 
   const handleArchive = useCallback(async (id: string, name: string) => {
     if (!window.confirm(`Archive "${name}"? It will be hidden from active listings.`)) return;
@@ -81,6 +87,72 @@ export default function ProductsPage() {
       setActionLoadingId(null);
     }
   }, [archiveMutation]);
+
+  const handleBulkArchiveFromStorefront = useCallback(async () => {
+    if (bulkCategoryIds.length === 0 && bulkBrandIds.length === 0) {
+      toast.error("Alege cel puțin o categorie sau un brand.");
+      return;
+    }
+    const catNames = bulkCategoryIds
+      .map((id) => categories.find((c) => c.id === id)?.name)
+      .filter((n): n is string => Boolean(n));
+    const brandNames = bulkBrandIds
+      .map((id) => brands.find((b) => b.id === id)?.name)
+      .filter((n): n is string => Boolean(n));
+
+    const formatNames = (names: string[], label: string) => {
+      if (names.length === 0) return "";
+      const head = names.slice(0, 4).map((n) => `„${n}”`).join(", ");
+      const rest =
+        names.length > 4 ? `, … (+${names.length - 4} ${label} în plus)` : "";
+      return head + rest;
+    };
+
+    const parts: string[] = [];
+    if (catNames.length) {
+      parts.push(
+        `${catNames.length} ${catNames.length === 1 ? "categorie" : "categorii"}: ${formatNames(catNames, "categorii")}${
+          bulkIncludeSubcategories ? " (inclusiv subcategorii active, pe fiecare categorie rădăcină selectată)" : ""
+        }`
+      );
+    }
+    if (brandNames.length) {
+      parts.push(
+        `${brandNames.length} ${brandNames.length === 1 ? "brand" : "branduri"}: ${formatNames(brandNames, "branduri")}`
+      );
+    }
+    const summary = parts.join(". ");
+    if (
+      !window.confirm(
+        `Produsele ACTIVE care corespund: ${summary}. Vor fi arhivate și nu vor mai apărea pe site. Continui?`
+      )
+    ) {
+      return;
+    }
+    try {
+      const res = await bulkArchiveMutation.mutateAsync({
+        ...(bulkCategoryIds.length > 0 ? { categoryIds: bulkCategoryIds } : {}),
+        ...(bulkBrandIds.length > 0 ? { brandIds: bulkBrandIds } : {}),
+        ...(bulkCategoryIds.length > 0 && bulkIncludeSubcategories
+          ? { includeCategoryDescendants: true }
+          : {}),
+      });
+      toast.success(
+        res.archivedCount === 0
+          ? "Niciun produs activ nu a corespuns criteriilor."
+          : `${res.archivedCount} produse au fost ascunse de pe site (arhivate).`
+      );
+    } catch {
+      toast.error("Arhivarea în masă a eșuat.");
+    }
+  }, [
+    bulkCategoryIds,
+    bulkBrandIds,
+    bulkIncludeSubcategories,
+    bulkArchiveMutation,
+    categories,
+    brands,
+  ]);
 
   const handleDelete = useCallback(async (id: string, name: string) => {
     if (!window.confirm(`Delete "${name}"? This action cannot be undone.`)) return;
@@ -345,6 +417,87 @@ export default function ProductsPage() {
               </div>
             </>
           )}
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-2xl border-border/60">
+        <CardHeader>
+          <CardTitle>Ascunde de pe site (în masă)</CardTitle>
+          <CardDescription>
+            Arhivează toate produsele <strong>ACTIVE</strong> care se potrivesc criteriilor. Nu afectează
+            ciorne (DRAFT). Dacă selectezi categorii: produsul trebuie să fie în oricare dintre ele.
+            Dacă selectezi branduri: oricare dintre ele. Dacă selectezi ambele: categoria
+            (expandată) și brandul.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-2">
+            <div>
+              <p className="mb-1.5 text-xs font-medium text-muted-foreground">Categorii (opțional)</p>
+              <SearchableMultiSelect
+                className="rounded-2xl"
+                value={bulkCategoryIds}
+                onValueChange={setBulkCategoryIds}
+                options={categories.map((c) => ({
+                  value: c.id,
+                  label: c.name,
+                  keywords: [c.normalizedName ?? "", c.slug ?? ""],
+                }))}
+                placeholder="Adaugă categorii…"
+                searchPlaceholder="Caută categorii…"
+              />
+            </div>
+            <div>
+              <p className="mb-1.5 text-xs font-medium text-muted-foreground">Branduri (opțional)</p>
+              <SearchableMultiSelect
+                className="rounded-2xl"
+                value={bulkBrandIds}
+                onValueChange={setBulkBrandIds}
+                options={brands.map((b) => ({
+                  value: b.id,
+                  label: b.name,
+                  keywords: [b.slug],
+                }))}
+                placeholder="Adaugă branduri…"
+                searchPlaceholder="Caută branduri…"
+              />
+            </div>
+          </div>
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+            <input
+              type="checkbox"
+              className="size-4 rounded border-border"
+              checked={bulkIncludeSubcategories}
+              onChange={(e) => setBulkIncludeSubcategories(e.target.checked)}
+              disabled={bulkCategoryIds.length === 0}
+            />
+            Include subcategorii active (pentru fiecare categorie rădăcină selectată)
+          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="destructive"
+              className="rounded-xl"
+              disabled={bulkArchiveMutation.isPending}
+              onClick={handleBulkArchiveFromStorefront}
+            >
+              {bulkArchiveMutation.isPending ? "Se procesează…" : "Arhivează produsele potrivite"}
+            </Button>
+            {(bulkCategoryIds.length > 0 || bulkBrandIds.length > 0) && (
+              <Button
+                type="button"
+                variant="ghost"
+                className="rounded-xl"
+                onClick={() => {
+                  setBulkCategoryIds([]);
+                  setBulkBrandIds([]);
+                  setBulkIncludeSubcategories(false);
+                }}
+              >
+                Resetează filtre
+              </Button>
+            )}
+          </div>
         </CardContent>
       </Card>
     </motion.div>

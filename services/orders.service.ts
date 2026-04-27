@@ -47,7 +47,18 @@ export interface OrderListItem {
   } | null;
 }
 
+export type OrderRevenueSummary = {
+  totalRevenue: string;
+  orderCount: number;
+  byDay?: Array<{ date: string; totalRevenue: string; orderCount: number }>;
+};
+
 export const ordersService = {
+  getRevenueSummary: (params: { from: string; to: string; groupBy?: "day" }) =>
+    api
+      .get<OrderRevenueSummary>("/orders/revenue-summary", { params })
+      .then((r) => r.data),
+
   getList: (params?: {
     page?: number;
     limit?: number;

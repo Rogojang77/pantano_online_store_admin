@@ -204,6 +204,15 @@ export const productsService = {
   archive: (id: string) =>
     api.put<ProductDetail>(`/products/${id}`, { status: "ARCHIVED" }).then((r) => r.data),
 
+  bulkArchive: (payload: {
+    categoryIds?: string[];
+    brandIds?: string[];
+    includeCategoryDescendants?: boolean;
+  }) =>
+    api
+      .post<{ archivedCount: number }>("/products/bulk/archive", payload)
+      .then((r) => r.data),
+
   createVariant: (payload: CreateVariantPayload) =>
     api.post<ProductVariantItem>("/products/variants", payload).then((r) => r.data),
 
