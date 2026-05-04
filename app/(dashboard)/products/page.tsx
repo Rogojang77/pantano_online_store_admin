@@ -30,6 +30,7 @@ import {
   useArchiveProduct,
   useBulkArchiveProducts,
 } from "./_hooks/use-product-queries";
+import { notifyApiError } from "@/lib/notify-api-error";
 
 export default function ProductsPage() {
   const router = useRouter();
@@ -81,8 +82,8 @@ export default function ProductsPage() {
     try {
       await archiveMutation.mutateAsync(id);
       toast.success(`"${name}" archived`);
-    } catch {
-      toast.error("Failed to archive product");
+    } catch (error) {
+      notifyApiError(error, "Failed to archive product");
     } finally {
       setActionLoadingId(null);
     }
@@ -142,8 +143,8 @@ export default function ProductsPage() {
           ? "Niciun produs activ nu a corespuns criteriilor."
           : `${res.archivedCount} produse au fost ascunse de pe site (arhivate).`
       );
-    } catch {
-      toast.error("Arhivarea în masă a eșuat.");
+    } catch (error) {
+      notifyApiError(error, "Arhivarea în masă a eșuat.");
     }
   }, [
     bulkCategoryIds,
@@ -160,8 +161,8 @@ export default function ProductsPage() {
     try {
       await deleteMutation.mutateAsync(id);
       toast.success(`"${name}" deleted`);
-    } catch {
-      toast.error("Failed to delete product");
+    } catch (error) {
+      notifyApiError(error, "Failed to delete product");
     } finally {
       setActionLoadingId(null);
     }

@@ -39,6 +39,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import api from "@/services/api";
 import { ListFetchError } from "@/components/list-fetch-error";
+import { notifyApiError } from "@/lib/notify-api-error";
 
 const STATUS_OPTIONS: OrderStatus[] = [
   "PENDING",
@@ -117,10 +118,10 @@ export default function OrdersPage() {
         setData(response);
         setLoadError(false);
       })
-      .catch(() => {
+      .catch((error) => {
         setData(null);
         setLoadError(true);
-        toast.error("Failed to load orders");
+        notifyApiError(error, "Failed to load orders");
       })
       .finally(() => setLoading(false));
   }, [page, limit, statusFilter, typeFilter, fromDate, toDate, searchDebounced]);
@@ -137,9 +138,9 @@ export default function OrdersPage() {
       .then((full) => {
         setSelectedOrder(full);
       })
-      .catch(() => {
+      .catch((error) => {
         setSelectedOrder(order);
-        toast.error("Could not load full order details");
+        notifyApiError(error, "Could not load full order details");
       })
       .finally(() => setDetailLoading(false));
   }, []);
@@ -152,8 +153,8 @@ export default function OrdersPage() {
         toast.success("Status updated");
         setSelectedOrder((prev) => (prev?.id === orderId ? { ...prev, status: newStatus } : prev));
         fetchOrders();
-      } catch {
-        toast.error("Failed to update status");
+      } catch (error) {
+        notifyApiError(error, "Failed to update status");
       } finally {
         setStatusUpdating(false);
       }
@@ -197,8 +198,8 @@ export default function OrdersPage() {
         window.location.href = pdfUrl;
       }
       window.setTimeout(() => URL.revokeObjectURL(pdfUrl), 60000);
-    } catch {
-      toast.error("Failed to load Odoo invoice PDF");
+    } catch (error) {
+      notifyApiError(error, "Failed to load Odoo invoice PDF");
     } finally {
       setPrintingInvoiceId(null);
     }

@@ -15,7 +15,11 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { adminService, type DashboardStats } from "@/services/admin.service";
+import {
+  adminService,
+  type AnalyticsFunnel,
+  type DashboardStats,
+} from "@/services/admin.service";
 import { odooService } from "@/services/odoo.service";
 import { ordersService } from "@/services/orders.service";
 import { reservationsService } from "@/services/reservations.service";
@@ -53,6 +57,7 @@ export default function DashboardPage() {
     { id: string; text: string; time: string; createdAt: string }[]
   >([]);
   const [loading, setLoading] = useState(true);
+  const [funnel, setFunnel] = useState<AnalyticsFunnel | null>(null);
 
   useEffect(() => {
     const now = new Date();
@@ -99,6 +104,7 @@ export default function DashboardPage() {
           data: [],
           meta: { total: 0, page: 1, limit: 1, totalPages: 1, hasNext: false, hasPrev: false },
         })),
+      adminService.getAnalyticsFunnel(30).catch(() => null),
     ])
       .then(
         ([
@@ -109,11 +115,13 @@ export default function DashboardPage() {
           ordersTodayData,
           recentReservations,
           reservationsTodayData,
+          funnelData,
         ]) => {
           setStats(statsData);
           setSyncState(syncData);
           setOrdersToday(ordersTodayData.meta.total);
           setReservationsToday(reservationsTodayData.meta.total);
+          setFunnel(funnelData);
 
           const orderEvents = recentOrders.data.map((order) => ({
             id: `order-${order.id}`,
@@ -283,7 +291,7 @@ export default function DashboardPage() {
       </motion.div>
 
       <motion.div variants={item}>
-        <OrderRevenueCard />
+        <OrderRevenueCard funnel={funnel ? funnel.rates : undefined} />
       </motion.div>
 
       {/* Recent activity */}

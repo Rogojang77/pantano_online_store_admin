@@ -22,6 +22,7 @@ import type {
   SyncLogEntry,
 } from "@/types/odoo";
 import { cn } from "@/lib/utils";
+import { notifyApiError } from "@/lib/notify-api-error";
 
 function OdooIntegrationContent() {
   const [config, setConfig] = useState<OdooConfig | null>(null);
@@ -99,8 +100,8 @@ function OdooIntegrationContent() {
       await odooService.triggerSync(type);
       toast.success(`Sync (${type}) started`);
       await Promise.all([loadSyncStatus(), loadLogs()]);
-    } catch {
-      toast.error("Failed to start sync");
+    } catch (error) {
+      notifyApiError(error, "Failed to start sync");
     } finally {
       setSyncing(false);
     }
@@ -125,7 +126,7 @@ function OdooIntegrationContent() {
       setPreviewError(message);
       setPreviewProducts([]);
       setPreviewFields([]);
-      toast.error("Failed to load products preview");
+      notifyApiError(error, "Failed to load products preview");
     } finally {
       setPreviewLoading(false);
     }
@@ -136,8 +137,8 @@ function OdooIntegrationContent() {
       await odooService.cancelSync();
       toast.success("Sync cancelled");
       await Promise.all([loadSyncStatus(), loadLogs()]);
-    } catch {
-      toast.error("Failed to cancel");
+    } catch (error) {
+      notifyApiError(error, "Failed to cancel");
     }
   };
 

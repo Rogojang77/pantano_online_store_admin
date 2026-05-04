@@ -41,7 +41,14 @@ function formatMoney(value: string) {
 
 const weekdayRo = new Intl.DateTimeFormat("ro-RO", { weekday: "short" });
 
-export function OrderRevenueCard() {
+interface FunnelSnapshot {
+  viewToCartPct: number;
+  cartToBeginCheckoutPct: number;
+  beginCheckoutToPurchasePct: number;
+  viewToPurchasePct: number;
+}
+
+export function OrderRevenueCard({ funnel }: { funnel?: FunnelSnapshot }) {
   const [mode, setMode] = useState<ViewMode>("day");
   const [dayCursor, setDayCursor] = useState(() => startOfLocalDay(new Date()));
   const [monthCursor, setMonthCursor] = useState(() => startOfLocalMonth(new Date()));
@@ -290,6 +297,28 @@ export function OrderRevenueCard() {
                     })}
                   </tbody>
                 </table>
+              </div>
+            )}
+            {funnel && (
+              <div className="grid gap-2 rounded-xl border border-border/60 bg-muted/20 p-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div>
+                  <p className="text-xs text-muted-foreground">View → Cart</p>
+                  <p className="text-sm font-semibold tabular-nums">{funnel.viewToCartPct.toFixed(2)}%</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Cart → Checkout</p>
+                  <p className="text-sm font-semibold tabular-nums">{funnel.cartToBeginCheckoutPct.toFixed(2)}%</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Checkout → Purchase</p>
+                  <p className="text-sm font-semibold tabular-nums">
+                    {funnel.beginCheckoutToPurchasePct.toFixed(2)}%
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">View → Purchase</p>
+                  <p className="text-sm font-semibold tabular-nums">{funnel.viewToPurchasePct.toFixed(2)}%</p>
+                </div>
               </div>
             )}
           </>
